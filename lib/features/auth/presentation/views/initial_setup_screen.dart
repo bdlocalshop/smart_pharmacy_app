@@ -18,7 +18,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
   final _licenseController = TextEditingController(text: 'LIC-PHARM-2026-904');
   final _phoneController = TextEditingController(text: '+880 1717-449639');
   final _addressController = TextEditingController(text: '742 Evergreen Terrace, Medical District, Suite 100');
-  final _currencyController = TextEditingController(text: '\$');
+  final _currencyController = TextEditingController(text: '৳');
 
   final _ownerFullNameController = TextEditingController(text: 'Dr. Sarah Jenkins');
   final _ownerUsernameController = TextEditingController(text: 'admin');
@@ -51,7 +51,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
       contactPhone: _phoneController.text,
       licenseNumber: _licenseController.text.isEmpty ? null : _licenseController.text,
       address: _addressController.text.isEmpty ? null : _addressController.text,
-      currencySymbol: _currencyController.text.isEmpty ? '\$' : _currencyController.text,
+      currencySymbol: _currencyController.text.isEmpty ? '৳' : _currencyController.text,
       ownerFullName: _ownerFullNameController.text,
       ownerUsername: _ownerUsernameController.text,
       ownerPassword: _ownerPasswordController.text,

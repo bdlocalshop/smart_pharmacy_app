@@ -83,11 +83,20 @@ class AppTheme {
         hintStyle: const TextStyle(color: AppColors.textMuted, fontSize: 13),
       ),
       chipTheme: ChipThemeData(
-        backgroundColor: AppColors.surfaceElevated,
+        backgroundColor: AppColors.surface,
         selectedColor: AppColors.primary.withValues(alpha: 0.15),
         side: const BorderSide(color: AppColors.border, width: 1),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+        labelStyle: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: const TextStyle(
+          color: AppColors.primaryDark,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
       ),
       dividerTheme: const DividerThemeData(
         color: AppColors.border,

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
 import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
+import 'package:smart_pharmacy_app/core/localization/app_strings.dart';
+import 'package:smart_pharmacy_app/core/localization/language_controller.dart';
 import 'package:smart_pharmacy_app/features/inventory/presentation/controllers/inventory_controller.dart';
 import 'package:smart_pharmacy_app/features/inventory/presentation/views/batch_management_dialog.dart';
 
@@ -24,6 +26,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
     final warningAsync = ref.watch(warningExpiringBatchesProvider);
     final cautionAsync = ref.watch(cautionExpiringBatchesProvider);
     final lowStockList = ref.watch(lowStockProductsProvider);
+    final strings = ref.watch(appStringsProvider);
 
     final expiredList = expiredAsync.value ?? [];
     final urgentList = urgentAsync.value ?? [];
@@ -38,10 +41,10 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
           children: [
             Expanded(
               child: _buildRadarKpiCard(
-                title: 'Expired Stock',
+                title: strings.radarExpiredTitle,
                 count: '${expiredList.length}',
-                unitCount: '${expiredList.fold<int>(0, (s, b) => s + b.batch.currentStock)} units',
-                subtitle: '🔴 Hard-blocked from POS',
+                unitCount: '${expiredList.fold<int>(0, (s, b) => s + b.batch.currentStock)} ${strings.unitsLabel}',
+                subtitle: strings.radarExpiredSub,
                 color: AppColors.alertCritical,
                 icon: Icons.cancel_outlined,
                 isSelected: _selectedFilterTab == 1,
@@ -51,10 +54,10 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             const SizedBox(width: 14),
             Expanded(
               child: _buildRadarKpiCard(
-                title: 'Expiring < 30 Days',
+                title: strings.radarUnder30Title,
                 count: '${urgentList.length}',
-                unitCount: '${urgentList.fold<int>(0, (s, b) => s + b.batch.currentStock)} units',
-                subtitle: '🟡 Critical urgency',
+                unitCount: '${urgentList.fold<int>(0, (s, b) => s + b.batch.currentStock)} ${strings.unitsLabel}',
+                subtitle: strings.radarUnder30Sub,
                 color: AppColors.alertUrgent,
                 icon: Icons.warning_amber_rounded,
                 isSelected: _selectedFilterTab == 2,
@@ -64,10 +67,10 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             const SizedBox(width: 14),
             Expanded(
               child: _buildRadarKpiCard(
-                title: 'Expiring 31-60 Days',
+                title: strings.radar31To60Title,
                 count: '${warningList.length}',
-                unitCount: '${warningList.fold<int>(0, (s, b) => s + b.batch.currentStock)} units',
-                subtitle: '🟠 Early warning',
+                unitCount: '${warningList.fold<int>(0, (s, b) => s + b.batch.currentStock)} ${strings.unitsLabel}',
+                subtitle: strings.radar31To60Sub,
                 color: AppColors.alertWarning,
                 icon: Icons.hourglass_top,
                 isSelected: _selectedFilterTab == 3,
@@ -77,10 +80,10 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             const SizedBox(width: 14),
             Expanded(
               child: _buildRadarKpiCard(
-                title: 'Expiring 61-90 Days',
+                title: strings.radar61To90Title,
                 count: '${cautionList.length}',
-                unitCount: '${cautionList.fold<int>(0, (s, b) => s + b.batch.currentStock)} units',
-                subtitle: '🟡 Caution radar',
+                unitCount: '${cautionList.fold<int>(0, (s, b) => s + b.batch.currentStock)} ${strings.unitsLabel}',
+                subtitle: strings.radar61To90Sub,
                 color: AppColors.alertCaution,
                 icon: Icons.timelapse,
                 isSelected: _selectedFilterTab == 4,
@@ -90,10 +93,10 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             const SizedBox(width: 14),
             Expanded(
               child: _buildRadarKpiCard(
-                title: 'Low Stock Threshold',
+                title: strings.radarLowStockTitle,
                 count: '${lowStockList.length}',
-                unitCount: 'Medicines',
-                subtitle: '⚠️ Reorder required',
+                unitCount: strings.medicinesLabel,
+                subtitle: strings.radarLowStockSub,
                 color: Colors.deepPurple,
                 icon: Icons.production_quantity_limits,
                 isSelected: _selectedFilterTab == 5,
@@ -110,17 +113,17 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _buildTabButton(0, 'All Alerts (${expiredList.length + urgentList.length + warningList.length + cautionList.length + lowStockList.length})'),
+              _buildTabButton(0, '${strings.radarAllAlerts} (${expiredList.length + urgentList.length + warningList.length + cautionList.length + lowStockList.length})'),
               const SizedBox(width: 8),
-              _buildTabButton(1, '🔴 Expired Stock (${expiredList.length})', color: AppColors.alertCritical),
+              _buildTabButton(1, '${strings.radarExpiredFilter} (${expiredList.length})', color: AppColors.alertCritical),
               const SizedBox(width: 8),
-              _buildTabButton(2, '🟡 Urgent < 30 Days (${urgentList.length})', color: AppColors.alertUrgent),
+              _buildTabButton(2, '${strings.radarUrgentFilter} (${urgentList.length})', color: AppColors.alertUrgent),
               const SizedBox(width: 8),
-              _buildTabButton(3, '🟠 Warning 31-60 Days (${warningList.length})', color: AppColors.alertWarning),
+              _buildTabButton(3, '${strings.radarWarningFilter} (${warningList.length})', color: AppColors.alertWarning),
               const SizedBox(width: 8),
-              _buildTabButton(4, '🟡 Caution 61-90 Days (${cautionList.length})', color: AppColors.alertCaution),
+              _buildTabButton(4, '${strings.radarCautionFilter} (${cautionList.length})', color: AppColors.alertCaution),
               const SizedBox(width: 8),
-              _buildTabButton(5, '⚠️ Low Stock Reorders (${lowStockList.length})', color: Colors.deepPurple),
+              _buildTabButton(5, '${strings.radarLowStockFilter} (${lowStockList.length})', color: Colors.deepPurple),
             ],
           ),
         ),
@@ -129,13 +132,14 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
 
         // Main Alert Content Display
         if (_selectedFilterTab == 5)
-          _buildLowStockTable(lowStockList)
+          _buildLowStockTable(lowStockList, strings)
         else
           _buildExpiryAlertsTable(
             expired: _selectedFilterTab == 0 || _selectedFilterTab == 1 ? expiredList : [],
             urgent: _selectedFilterTab == 0 || _selectedFilterTab == 2 ? urgentList : [],
             warning: _selectedFilterTab == 0 || _selectedFilterTab == 3 ? warningList : [],
             caution: _selectedFilterTab == 0 || _selectedFilterTab == 4 ? cautionList : [],
+            strings: strings,
           ),
       ],
     );
@@ -170,7 +174,13 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
+                Expanded(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary),
+                  ),
+                ),
                 Icon(icon, color: color, size: 20),
               ],
             ),
@@ -214,7 +224,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
         label,
         style: TextStyle(
           color: isSelected ? (color ?? AppColors.primaryDark) : AppColors.textPrimary,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
           fontSize: 12,
         ),
       ),
@@ -226,6 +236,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
     required List<BatchWithProductInfo> urgent,
     required List<BatchWithProductInfo> warning,
     required List<BatchWithProductInfo> caution,
+    required AppStrings strings,
   }) {
     final allItems = [...expired, ...urgent, ...warning, ...caution];
 
@@ -237,12 +248,12 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             children: [
               const Icon(Icons.check_circle_outline, size: 52, color: AppColors.accent),
               const SizedBox(height: 12),
-              const Text(
-                'No expiring or expired stock in this category!',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+              Text(
+                strings.noExpiringStockTitle,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
               ),
               const SizedBox(height: 4),
-              const Text('All batches are safely beyond the selected threshold.', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+              Text(strings.noExpiringStockSub, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
             ],
           ),
         ),
@@ -264,14 +275,14 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
               borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Expanded(flex: 3, child: Text('Medicine (Brand & Generic)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Physical Shelf Locator', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Batch # & Supplier', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Stock Remaining', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Expiry Date & Status', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Actions', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 3, child: Text(strings.colMedBrandGeneric, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colShelfLocation, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colBatchSupplier, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colStockRemaining, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colExpiryDateStatus, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colActions, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
               ],
             ),
           ),
@@ -336,8 +347,8 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${b.currentStock} units', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                          Text('MRP: \$${b.sellingPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                          Text('${b.currentStock} ${strings.unitsLabel}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Text('MRP: ৳${b.sellingPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                         ],
                       ),
                     ),
@@ -356,7 +367,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                               color: isExpired ? AppColors.alertCritical : AppColors.textPrimary,
                             ),
                           ),
-                          _buildUrgencyChip(days),
+                          _buildUrgencyChip(days, strings),
                         ],
                       ),
                     ),
@@ -380,7 +391,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                                 builder: (_) => BatchManagementDialog(product: p),
                               );
                             },
-                            child: Text(isExpired ? 'Dispose / Return' : 'Inspect Batch', style: const TextStyle(fontSize: 11)),
+                            child: Text(isExpired ? strings.disposeReturn : strings.inspectBatch, style: const TextStyle(fontSize: 11)),
                           ),
                         ],
                       ),
@@ -395,39 +406,39 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
     );
   }
 
-  Widget _buildUrgencyChip(int days) {
+  Widget _buildUrgencyChip(int days, AppStrings strings) {
     if (days < 0) {
       return Container(
         margin: const EdgeInsets.only(top: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: AppColors.alertCritical.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-        child: Text('🔴 EXPIRED (${-days}d ago)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.alertCritical)),
+        child: Text(strings.expiredDaysAgo(-days), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.alertCritical)),
       );
     } else if (days <= 30) {
       return Container(
         margin: const EdgeInsets.only(top: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: AppColors.alertUrgent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-        child: Text('🟡 Urgent ($days days left)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.alertUrgent)),
+        child: Text(strings.urgentDaysLeft(days), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.alertUrgent)),
       );
     } else if (days <= 60) {
       return Container(
         margin: const EdgeInsets.only(top: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: AppColors.alertWarning.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-        child: Text('🟠 Warning ($days days left)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.alertWarning)),
+        child: Text(strings.warningDaysLeft(days), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.alertWarning)),
       );
     } else {
       return Container(
         margin: const EdgeInsets.only(top: 2),
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         decoration: BoxDecoration(color: AppColors.alertCaution.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-        child: Text('🟡 Caution ($days days left)', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFC2410C))),
+        child: Text(strings.cautionDaysLeft(days), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFC2410C))),
       );
     }
   }
 
-  Widget _buildLowStockTable(List<ProductWithAggregateStock> lowStockItems) {
+  Widget _buildLowStockTable(List<ProductWithAggregateStock> lowStockItems, AppStrings strings) {
     if (lowStockItems.isEmpty) {
       return Center(
         child: Padding(
@@ -436,7 +447,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             children: [
               const Icon(Icons.check_circle_outline, size: 52, color: AppColors.accent),
               const SizedBox(height: 12),
-              const Text('All stock levels are above reorder thresholds!', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
+              Text(strings.allStockAboveReorder, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.primaryDark)),
             ],
           ),
         ),
@@ -455,14 +466,14 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
               borderRadius: BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
               border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Expanded(flex: 3, child: Text('Medicine (Brand & Generic)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Shelf Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Available Active Stock', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Reorder Threshold', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Shortage Count', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
-                Expanded(flex: 2, child: Text('Action', textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 3, child: Text(strings.colMedBrandGeneric, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colShelfLocation, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.availableActiveStock, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.reorderThreshold, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.shortageCount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                Expanded(flex: 2, child: Text(strings.colActions, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
               ],
             ),
           ),
@@ -502,15 +513,15 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                     ),
                     Expanded(
                       flex: 2,
-                      child: Text('${item.activeStock} units', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.alertWarning)),
+                      child: Text('${item.activeStock} ${strings.unitsLabel}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.alertWarning)),
                     ),
                     Expanded(
                       flex: 2,
-                      child: Text('${p.minStockAlert} units', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                      child: Text('${p.minStockAlert} ${strings.unitsLabel}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                     ),
                     Expanded(
                       flex: 2,
-                      child: Text('-$deficit units below min', style: const TextStyle(color: AppColors.alertCritical, fontWeight: FontWeight.bold, fontSize: 12)),
+                      child: Text(strings.belowMinAlert(deficit), style: const TextStyle(color: AppColors.alertCritical, fontWeight: FontWeight.bold, fontSize: 12)),
                     ),
                     Expanded(
                       flex: 2,
@@ -525,7 +536,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                               visualDensity: VisualDensity.compact,
                             ),
                             icon: const Icon(Icons.add_shopping_cart, size: 14),
-                            label: const Text('Procure Batch', style: TextStyle(fontSize: 11)),
+                            label: Text(strings.procureBatch, style: const TextStyle(fontSize: 11)),
                             onPressed: () {
                               showDialog(
                                 context: context,

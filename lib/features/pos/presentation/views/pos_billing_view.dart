@@ -31,7 +31,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
   final _invoiceDiscountCtl = TextEditingController(text: '0.00');
   final _tenderedCtl = TextEditingController();
 
-  final _currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+  final _currencyFormat = NumberFormat.currency(symbol: '৳', decimalDigits: 2);
   final _dateFormat = DateFormat('yyyy-MM-dd');
 
   @override
@@ -895,7 +895,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                     textAlign: TextAlign.right,
                     decoration: const InputDecoration(
                       isDense: true,
-                      prefixText: '\$ ',
+                      prefixText: '৳ ',
                       contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     ),
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
@@ -1009,7 +1009,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       labelText: strings.cashTenderedF4,
-                      prefixText: '\$ ',
+                      prefixText: '৳ ',
                       hintText: cart.totalPayable.toStringAsFixed(2),
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1032,14 +1032,18 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
               runSpacing: 6,
               children: [
                 ActionChip(
-                  label: Text(strings.exactCash, style: const TextStyle(fontSize: 11)),
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.border, width: 1.2),
+                  label: Text(strings.exactCash, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   onPressed: () {
                     _tenderedCtl.text = cart.totalPayable.toStringAsFixed(2);
                     ref.read(posCartControllerProvider.notifier).setAmountTendered(cart.totalPayable);
                   },
                 ),
                 ActionChip(
-                  label: const Text('+\$10', style: TextStyle(fontSize: 11)),
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.border, width: 1.2),
+                  label: const Text('+৳10', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   onPressed: () {
                     final curr = double.tryParse(_tenderedCtl.text) ?? cart.totalPayable;
                     final next = curr + 10;
@@ -1048,7 +1052,9 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                   },
                 ),
                 ActionChip(
-                  label: const Text('+\$50', style: TextStyle(fontSize: 11)),
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.border, width: 1.2),
+                  label: const Text('+৳50', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   onPressed: () {
                     final curr = double.tryParse(_tenderedCtl.text) ?? cart.totalPayable;
                     final next = curr + 50;
@@ -1057,7 +1063,9 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                   },
                 ),
                 ActionChip(
-                  label: const Text('+\$100', style: TextStyle(fontSize: 11)),
+                  backgroundColor: AppColors.surface,
+                  side: const BorderSide(color: AppColors.border, width: 1.2),
+                  label: const Text('+৳100', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   onPressed: () {
                     final curr = double.tryParse(_tenderedCtl.text) ?? cart.totalPayable;
                     final next = curr + 100;

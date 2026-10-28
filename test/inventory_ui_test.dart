@@ -302,8 +302,8 @@ void main() {
       // Verify Multi-Supplier Procurement Form Fields
       expect(find.text('Batch Number *'), findsOneWidget);
       expect(find.text('Supplier / Distributor Store *'), findsOneWidget);
-      expect(find.text('Purchase Cost Price (\$) *'), findsOneWidget);
-      expect(find.text('Selling Price MRP (\$) *'), findsOneWidget);
+      expect(find.text('Purchase Cost Price (৳) *'), findsOneWidget);
+      expect(find.text('Selling Price MRP (৳) *'), findsOneWidget);
       expect(find.text('Units Received *'), findsOneWidget);
 
       // Verify Existing Batch is listed in FEFO Priority Table
@@ -312,8 +312,8 @@ void main() {
       expect(find.text('FEFO Priority #1'), findsOneWidget);
 
       // Enter Purchase Price $20.00 and Selling MRP $30.00 -> Verify Gross Margin calculation
-      await tester.enterText(find.widgetWithText(TextFormField, 'Purchase Cost Price (\$) *'), '20.00');
-      await tester.enterText(find.widgetWithText(TextFormField, 'Selling Price MRP (\$) *'), '30.00');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Purchase Cost Price (৳) *'), '20.00');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Selling Price MRP (৳) *'), '30.00');
       await tester.pump();
 
       // Selling $30 - Cost $20 = Profit $10 -> Margin: (30 - 20)/30 * 100 = 33.3%

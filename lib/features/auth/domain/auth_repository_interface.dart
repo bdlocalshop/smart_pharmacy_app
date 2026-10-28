@@ -16,7 +16,7 @@ abstract class IAuthRepository {
     required String contactPhone,
     String? licenseNumber,
     String? address,
-    String currencySymbol = '\$',
+    String currencySymbol = '৳',
     required String ownerFullName,
     required String ownerUsername,
     required String ownerPassword,

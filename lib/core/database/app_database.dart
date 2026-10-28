@@ -48,6 +48,11 @@ class AppDatabase extends _$AppDatabase {
         beforeOpen: (details) async {
           // Additional integrity and pragmatic checks
           await customStatement('PRAGMA foreign_keys = ON;');
+          try {
+            await customStatement("UPDATE pharmacy_settings SET currency_symbol = '৳' WHERE currency_symbol = '\$' OR currency_symbol IS NULL;");
+          } catch (_) {
+            // Table might not exist yet on initial run
+          }
         },
       );
 }

@@ -47,7 +47,7 @@ class UserSession {
       role: UserRole.fromCode(map['role'] as String),
       pharmacyUid: map['pharmacy_uid'] as String,
       pharmacyName: map['pharmacy_name'] as String,
-      currencySymbol: (map['currency_symbol'] as String?) ?? '\$',
+      currencySymbol: (map['currency_symbol'] as String?) ?? '৳',
       token: map['token'] as String,
       loginTimestamp: DateTime.parse(map['login_timestamp'] as String),
     );

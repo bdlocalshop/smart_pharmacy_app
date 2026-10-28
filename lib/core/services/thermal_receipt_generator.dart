@@ -62,7 +62,7 @@ class ReceiptInvoiceData {
     this.licenseNumber,
     required this.contactPhone,
     this.address,
-    this.currencySymbol = '\$',
+    this.currencySymbol = '৳',
     required this.invoiceNumber,
     required this.date,
     required this.cashierName,

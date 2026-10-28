@@ -440,11 +440,23 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
     return Padding(
       padding: const EdgeInsets.only(right: 6.0),
       child: FilterChip(
-        label: Text(displayLabel ?? label, style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        label: Text(
+          displayLabel ?? label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+            color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
+          ),
+        ),
         selected: isSelected,
         visualDensity: VisualDensity.compact,
+        backgroundColor: AppColors.surface,
         selectedColor: AppColors.primary.withValues(alpha: 0.15),
         checkmarkColor: AppColors.primaryDark,
+        side: BorderSide(
+          color: isSelected ? AppColors.primary : AppColors.border,
+          width: 1.2,
+        ),
         onSelected: (_) => setState(() => _selectedCategory = label),
       ),
     );

@@ -4,7 +4,7 @@ class AppConstants {
 
   static const String appName = 'Smart Pharmacy';
   static const String appVersion = '2.0.0';
-  static const String defaultCurrencySymbol = '\$';
+  static const String defaultCurrencySymbol = '৳';
   static const String defaultDateFormat = 'yyyy-MM-dd';
   static const String defaultDateTimeFormat = 'yyyy-MM-dd HH:mm:ss';
   

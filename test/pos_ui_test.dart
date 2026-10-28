@@ -19,7 +19,7 @@ UserSession _createTestSession({UserRole role = UserRole.salesman}) {
     role: role,
     pharmacyUid: 'pharmacy-pos-101',
     pharmacyName: 'Central Care Pharmacy',
-    currencySymbol: '\$',
+    currencySymbol: '৳',
     token: 'test-token',
     loginTimestamp: DateTime.now(),
   );
@@ -337,30 +337,30 @@ void main() {
       await container.read(posCartControllerProvider.notifier).addToCart(sampleProd, quantity: 3);
       await tester.pump();
 
-      // Verify Subtotal = $30.00, Net Payable = $30.00
-      expect(find.text('\$30.00'), findsWidgets);
+      // Verify Subtotal = ৳30.00, Net Payable = ৳30.00
+      expect(find.text('৳30.00'), findsWidgets);
 
-      // Apply Invoice Discount of $5.00
+      // Apply Invoice Discount of ৳5.00
       container.read(posCartControllerProvider.notifier).setInvoiceDiscount(5.0);
       await tester.pump();
 
-      // Net Payable should now be $25.00
-      expect(find.text('\$25.00'), findsWidgets);
+      // Net Payable should now be ৳25.00
+      expect(find.text('৳25.00'), findsWidgets);
 
-      // Enter Tendered Amount = $30.00
+      // Enter Tendered Amount = ৳30.00
       container.read(posCartControllerProvider.notifier).setAmountTendered(30.0);
       await tester.pump();
 
-      // Change to Return: $30.00 - $25.00 = $5.00
+      // Change to Return: ৳30.00 - ৳25.00 = ৳5.00
       expect(find.text('Change to Return:'), findsOneWidget);
-      expect(find.text('\$5.00'), findsWidgets);
+      expect(find.text('৳5.00'), findsWidgets);
 
-      // Test Payment Shortfall: Tender only $20.00 (Short by $5.00)
+      // Test Payment Shortfall: Tender only ৳20.00 (Short by ৳5.00)
       container.read(posCartControllerProvider.notifier).setAmountTendered(20.0);
       await tester.pump();
 
       expect(find.text('Payment Shortfall:'), findsOneWidget);
-      expect(find.text('- \$5.00'), findsOneWidget);
+      expect(find.text('- ৳5.00'), findsOneWidget);
     });
 
     testWidgets('Completing sale triggers atomic checkout and displays invoice confirmation dialog', (tester) async {
@@ -409,8 +409,8 @@ void main() {
       // Verify Sale Completed Dialog
       expect(find.text('Sale Completed Successfully!'), findsOneWidget);
       expect(find.text('INV-20261024-0001'), findsOneWidget);
-      expect(find.text('\$30.00'), findsWidgets); // Total
-      expect(find.text('\$20.00'), findsOneWidget); // Change
+      expect(find.text('৳30.00'), findsWidgets); // Total
+      expect(find.text('৳20.00'), findsOneWidget); // Change
       expect(find.text('New Sale (F1 / Enter)'), findsOneWidget);
     });
 
@@ -461,7 +461,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(container.read(posCartControllerProvider).items.first.quantity, equals(5));
-      expect(find.text('\$50.00'), findsWidgets); // 5 * $10.00
+      expect(find.text('৳50.00'), findsWidgets); // 5 * ৳10.00
 
       // 2. Click "+" button: increases from typed 5 -> 6
       final addBtn = find.byIcon(Icons.add_circle_outline);

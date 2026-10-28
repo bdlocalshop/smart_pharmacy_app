@@ -508,6 +508,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   Widget _buildStaffManagementTab() {
     final authRepo = ref.watch(authRepositoryProvider);
     final session = ref.watch(currentUserSessionProvider);
+    final strings = ref.watch(appStringsProvider);
 
     return FutureBuilder(
       future: authRepo.getUsers(session?.pharmacyUid ?? ''),
@@ -519,18 +520,18 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Column(
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Staff & Role Administration', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    SizedBox(height: 4),
-                    Text('Only the Owner can create, inspect, and deactivate staff logins.', style: TextStyle(color: AppColors.textSecondary)),
+                    Text(strings.staffAdminTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(strings.staffAdminSubtitle, style: const TextStyle(color: AppColors.textSecondary)),
                   ],
                 ),
                 ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
                   icon: const Icon(Icons.person_add, size: 18),
-                  label: const Text('Add Staff User'),
+                  label: Text(strings.addStaffUserBtn),
                   onPressed: () => _showAddUserDialog(context),
                 ),
               ],
@@ -570,7 +571,22 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         ),
                         const SizedBox(width: 8),
                         u.role == 'OWNER'
-                            ? const Chip(label: Text('Master Owner', style: TextStyle(fontSize: 11)))
+                            ? Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppColors.border, width: 1.2),
+                                ),
+                                child: Text(
+                                  strings.masterOwnerBadge,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              )
                             : Switch(
                                 value: u.isActive,
                                 activeThumbColor: AppColors.accent,
@@ -970,7 +986,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           ),
                         ),
                         value: isActive,
-                        activeColor: AppColors.accent,
+                        activeThumbColor: AppColors.accent,
                         contentPadding: EdgeInsets.zero,
                         onChanged: (val) => setDialogState(() => isActive = val),
                       ),

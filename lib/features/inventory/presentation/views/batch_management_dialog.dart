@@ -406,7 +406,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                         onChanged: (_) => setState(() {}),
                                         decoration: const InputDecoration(
-                                          labelText: 'Purchase Cost Price (\$) *',
+                                          labelText: 'Purchase Cost Price (৳) *',
                                           hintText: 'e.g. 1.25',
                                           prefixIcon: Icon(Icons.money_off, size: 18),
                                         ),
@@ -420,7 +420,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                         onChanged: (_) => setState(() {}),
                                         decoration: const InputDecoration(
-                                          labelText: 'Selling Price MRP (\$) *',
+                                          labelText: 'Selling Price MRP (৳) *',
                                           hintText: 'e.g. 2.50',
                                           prefixIcon: Icon(Icons.attach_money, size: 18),
                                         ),
@@ -613,8 +613,8 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Text('Cost: \$${batch.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                            Text('Retail MRP: \$${batch.sellingPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
+                                            Text('Cost: ৳${batch.purchasePrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                            Text('Retail MRP: ৳${batch.sellingPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
                                           ],
                                         ),
                                       ),

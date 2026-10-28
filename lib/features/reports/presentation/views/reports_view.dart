@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
+import 'package:smart_pharmacy_app/core/localization/language_controller.dart';
 import 'package:smart_pharmacy_app/core/services/thermal_receipt_generator.dart';
 import 'package:smart_pharmacy_app/features/auth/domain/user_role.dart';
 import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_controller.dart';
@@ -23,8 +24,9 @@ class ReportsView extends ConsumerWidget {
     final selectedPayment = ref.watch(reportsPaymentFilterProvider);
     final session = ref.watch(currentUserSessionProvider);
     final role = session?.role ?? UserRole.manager;
+    final strings = ref.watch(appStringsProvider);
 
-    final currency = state.pharmacy?.currencySymbol ?? '\$';
+    final currency = state.pharmacy?.currencySymbol ?? '৳';
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final dateOnly = DateFormat('dd/MM/yyyy');
 
@@ -46,9 +48,9 @@ class ReportsView extends ConsumerWidget {
                 children: [
                   const Icon(Icons.calendar_month, color: AppColors.primary, size: 20),
                   const SizedBox(width: 8),
-                  const Text(
-                    'Period:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  Text(
+                    strings.periodLabel,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                   const SizedBox(width: 12),
 
@@ -62,6 +64,7 @@ class ReportsView extends ConsumerWidget {
                             context,
                             filter: DatePeriodFilter.today,
                             activeFilter: activeFilter,
+                            displayLabel: strings.periodToday,
                             onSelect: () => controller.setPeriodFilter(DatePeriodFilter.today),
                           ),
                           const SizedBox(width: 8),
@@ -69,6 +72,7 @@ class ReportsView extends ConsumerWidget {
                             context,
                             filter: DatePeriodFilter.yesterday,
                             activeFilter: activeFilter,
+                            displayLabel: strings.periodYesterday,
                             onSelect: () => controller.setPeriodFilter(DatePeriodFilter.yesterday),
                           ),
                           const SizedBox(width: 8),
@@ -76,6 +80,7 @@ class ReportsView extends ConsumerWidget {
                             context,
                             filter: DatePeriodFilter.thisWeek,
                             activeFilter: activeFilter,
+                            displayLabel: strings.periodThisWeek,
                             onSelect: () => controller.setPeriodFilter(DatePeriodFilter.thisWeek),
                           ),
                           const SizedBox(width: 8),
@@ -83,22 +88,41 @@ class ReportsView extends ConsumerWidget {
                             context,
                             filter: DatePeriodFilter.thisMonth,
                             activeFilter: activeFilter,
+                            displayLabel: strings.periodThisMonth,
                             onSelect: () => controller.setPeriodFilter(DatePeriodFilter.thisMonth),
                           ),
                           const SizedBox(width: 8),
                           ActionChip(
-                            avatar: const Icon(Icons.date_range, size: 15),
+                            avatar: Icon(
+                              Icons.date_range,
+                              size: 15,
+                              color: activeFilter == DatePeriodFilter.custom
+                                  ? AppColors.primary
+                                  : AppColors.textPrimary,
+                            ),
                             label: Text(
                               activeFilter == DatePeriodFilter.custom
                                   ? 'Custom: ${dateOnly.format(state.activeRange.start)} - ${dateOnly.format(state.activeRange.end)}'
-                                  : 'Custom Range...',
+                                  : strings.customRange,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: activeFilter == DatePeriodFilter.custom
+                                    ? FontWeight.bold
+                                    : FontWeight.w600,
+                                color: activeFilter == DatePeriodFilter.custom
+                                    ? AppColors.primaryDark
+                                    : AppColors.textPrimary,
+                              ),
                             ),
                             backgroundColor: activeFilter == DatePeriodFilter.custom
                                 ? AppColors.primary.withValues(alpha: 0.15)
-                                : null,
-                            side: activeFilter == DatePeriodFilter.custom
-                                ? const BorderSide(color: AppColors.primary, width: 1.5)
-                                : null,
+                                : AppColors.surface,
+                            side: BorderSide(
+                              color: activeFilter == DatePeriodFilter.custom
+                                  ? AppColors.primary
+                                  : AppColors.border,
+                              width: 1.2,
+                            ),
                             onPressed: () async {
                               final range = await showDialog<DateTimeRange>(
                                 context: context,
@@ -120,7 +144,7 @@ class ReportsView extends ConsumerWidget {
                   // Dual Exporters
                   OutlinedButton.icon(
                     icon: const Icon(Icons.table_chart, size: 16, color: Colors.green),
-                    label: const Text('Export Excel (.xlsx)'),
+                    label: Text(strings.exportExcel),
                     onPressed: state.isLoading || state.allSales.isEmpty
                         ? null
                         : () async {
@@ -138,7 +162,7 @@ class ReportsView extends ConsumerWidget {
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.description_outlined, size: 16, color: Colors.blueGrey),
-                    label: const Text('Export Audit Log (.txt)'),
+                    label: Text(strings.exportAuditLog),
                     onPressed: state.isLoading || state.allSales.isEmpty
                         ? null
                         : () async {
@@ -176,7 +200,7 @@ class ReportsView extends ConsumerWidget {
           children: [
             Expanded(
               child: _buildKpiCard(
-                title: 'Total Invoices',
+                title: strings.kpiTotalInvoices,
                 value: '${state.kpis.totalInvoices}',
                 subtitle: state.kpis.totalInvoices > 0
                     ? 'Avg: $currency${(state.kpis.grossRevenue / state.kpis.totalInvoices).toStringAsFixed(2)} / inv'
@@ -188,7 +212,7 @@ class ReportsView extends ConsumerWidget {
             const SizedBox(width: 14),
             Expanded(
               child: _buildKpiCard(
-                title: 'Units Sold',
+                title: strings.kpiUnitsSold,
                 value: '${state.kpis.totalUnitsSold} Units',
                 subtitle: 'Across all deducted batches',
                 icon: Icons.inventory_2_outlined,
@@ -198,7 +222,7 @@ class ReportsView extends ConsumerWidget {
             const SizedBox(width: 14),
             Expanded(
               child: _buildKpiCard(
-                title: 'Gross Revenue',
+                title: strings.kpiGrossRevenue,
                 value: '$currency${state.kpis.grossRevenue.toStringAsFixed(2)}',
                 subtitle: 'Discounts: -$currency${state.kpis.totalDiscounts.toStringAsFixed(2)}',
                 icon: Icons.payments_outlined,
@@ -208,7 +232,7 @@ class ReportsView extends ConsumerWidget {
             const SizedBox(width: 14),
             Expanded(
               child: _buildKpiCard(
-                title: 'Estimated Real Profit',
+                title: strings.kpiEstimatedProfit,
                 value: '$currency${state.kpis.grossProfit.toStringAsFixed(2)}',
                 subtitle:
                     'Margin: ${state.kpis.profitMarginPercentage.toStringAsFixed(1)}% • Cost: $currency${state.kpis.totalCostPrice.toStringAsFixed(2)}',
@@ -233,9 +257,9 @@ class ReportsView extends ConsumerWidget {
             children: [
               const Icon(Icons.account_balance_wallet_outlined, size: 18, color: AppColors.textMuted),
               const SizedBox(width: 8),
-              const Text(
-                'Payment Channels:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+              Text(
+                strings.paymentChannels,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
               ),
               const SizedBox(width: 16),
               ...['Cash', 'Card', 'Mobile', 'Due'].map((method) {
@@ -291,7 +315,7 @@ class ReportsView extends ConsumerWidget {
                         child: TextField(
                           decoration: InputDecoration(
                             isDense: true,
-                            hintText: 'Search by Invoice #, Customer, Phone, or Cashier...',
+                            hintText: strings.searchInvoicesHint,
                             prefixIcon: const Icon(Icons.search, size: 18),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                             contentPadding: const EdgeInsets.symmetric(vertical: 10),
@@ -326,9 +350,9 @@ class ReportsView extends ConsumerWidget {
                                 children: [
                                   Icon(Icons.query_stats, size: 48, color: Colors.grey.shade400),
                                   const SizedBox(height: 12),
-                                  const Text(
-                                    'No sales invoices found for the selected period & filters.',
-                                    style: TextStyle(
+                                  Text(
+                                    strings.noSalesInvoices,
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.textMuted,
                                     ),
@@ -345,18 +369,18 @@ class ReportsView extends ConsumerWidget {
                                   horizontalMargin: 16,
                                   columnSpacing: 16,
                                   columns: [
-                                    const DataColumn(label: Text('Invoice #')),
-                                    const DataColumn(label: Text('Actions')),
-                                    const DataColumn(label: Text('Date & Time')),
-                                    const DataColumn(label: Text('Customer')),
-                                    const DataColumn(label: Text('Cashier')),
-                                    const DataColumn(label: Text('Method')),
-                                    const DataColumn(numeric: true, label: Text('Units')),
-                                    const DataColumn(numeric: true, label: Text('Total Payable')),
+                                    DataColumn(label: Text(strings.colInvoiceNo)),
+                                    DataColumn(label: Text(strings.colActions)),
+                                    DataColumn(label: Text(strings.colDateTime)),
+                                    DataColumn(label: Text(strings.colCustomer)),
+                                    DataColumn(label: Text(strings.colCashier)),
+                                    DataColumn(label: Text(strings.colMethod)),
+                                    DataColumn(numeric: true, label: Text(strings.colUnits)),
+                                    DataColumn(numeric: true, label: Text(strings.colTotalPayable)),
                                     if (role.canViewProfits) ...[
-                                      const DataColumn(numeric: true, label: Text('Batch Cost')),
-                                      const DataColumn(numeric: true, label: Text('Real Profit')),
-                                      const DataColumn(numeric: true, label: Text('Margin')),
+                                      DataColumn(numeric: true, label: Text(strings.colBatchCost)),
+                                      DataColumn(numeric: true, label: Text(strings.colRealProfit)),
+                                      DataColumn(numeric: true, label: Text(strings.colMargin)),
                                     ],
                                   ],
                                   rows: state.filteredSales.map((report) {
@@ -492,16 +516,22 @@ class ReportsView extends ConsumerWidget {
     required DatePeriodFilter filter,
     required DatePeriodFilter activeFilter,
     required VoidCallback onSelect,
+    String? displayLabel,
   }) {
     final isSelected = filter == activeFilter;
     return ChoiceChip(
-      label: Text(filter.label),
+      label: Text(displayLabel ?? filter.label),
       selected: isSelected,
       onSelected: (_) => onSelect(),
+      backgroundColor: AppColors.surface,
       selectedColor: AppColors.primary.withValues(alpha: 0.15),
+      side: BorderSide(
+        color: isSelected ? AppColors.primary : AppColors.border,
+        width: 1.2,
+      ),
       labelStyle: TextStyle(
         color: isSelected ? AppColors.primaryDark : AppColors.textPrimary,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
       ),
     );
   }
@@ -585,7 +615,7 @@ class ReportsView extends ConsumerWidget {
       licenseNumber: pharmacy?.licenseNumber,
       contactPhone: pharmacy?.contactPhone ?? '+880 1717-449639',
       address: pharmacy?.address,
-      currencySymbol: pharmacy?.currencySymbol ?? '\$',
+      currencySymbol: pharmacy?.currencySymbol ?? '৳',
       invoiceNumber: s.invoiceNumber,
       date: s.createdAt,
       cashierName: report.cashierName,

@@ -243,7 +243,7 @@ class PosCartController extends Notifier<PosCartState> {
 
     if (!state.isPaymentSufficient) {
       state = state.copyWith(
-        errorMessage: 'Amount tendered is less than total payable (\$${state.totalPayable.toStringAsFixed(2)}).',
+        errorMessage: 'Amount tendered is less than total payable (৳${state.totalPayable.toStringAsFixed(2)}).',
       );
       return null;
     }
