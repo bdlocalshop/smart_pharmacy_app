@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/network/cloud_license_service.dart';
 import '../controllers/auth_controller.dart';
 
 /// First-time onboarding screen for setting up the local pharmacy tenant and master Owner.
@@ -18,15 +19,20 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
   final _licenseController = TextEditingController(text: 'LIC-PHARM-2026-904');
   final _phoneController = TextEditingController(text: '+880 1717-449639');
   final _addressController = TextEditingController(text: '742 Evergreen Terrace, Medical District, Suite 100');
+  final _mapPinController = TextEditingController();
   final _currencyController = TextEditingController(text: '৳');
 
-  final _ownerFullNameController = TextEditingController(text: 'Dr. Sarah Jenkins');
-  final _ownerUsernameController = TextEditingController(text: 'admin');
-  final _ownerPasswordController = TextEditingController(text: 'admin123');
-  final _confirmPasswordController = TextEditingController(text: 'admin123');
+  final _ownerFullNameController = TextEditingController();
+  final _ownerPhoneController = TextEditingController();
+  final _ownerEmailController = TextEditingController();
+  final _ownerUsernameController = TextEditingController();
+  final _ownerPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _registerWithCloud = true;
+  bool _isProcessing = false;
 
   @override
   void dispose() {
@@ -34,8 +40,11 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
     _licenseController.dispose();
     _phoneController.dispose();
     _addressController.dispose();
+    _mapPinController.dispose();
     _currencyController.dispose();
     _ownerFullNameController.dispose();
+    _ownerPhoneController.dispose();
+    _ownerEmailController.dispose();
     _ownerUsernameController.dispose();
     _ownerPasswordController.dispose();
     _confirmPasswordController.dispose();
@@ -45,17 +54,70 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
   Future<void> _submitSetup() async {
     if (!_formKey.currentState!.validate()) return;
 
+    setState(() => _isProcessing = true);
+
     final notifier = ref.read(authControllerProvider.notifier);
-    await notifier.setupInitialPharmacy(
+    final localSuccess = await notifier.setupInitialPharmacy(
       pharmacyName: _pharmacyNameController.text,
       contactPhone: _phoneController.text,
       licenseNumber: _licenseController.text.isEmpty ? null : _licenseController.text,
-      address: _addressController.text.isEmpty ? null : _addressController.text,
+      address: _addressController.text.trim(),
+      mapPinUrl: _mapPinController.text.trim().isEmpty ? null : _mapPinController.text.trim(),
       currencySymbol: _currencyController.text.isEmpty ? '৳' : _currencyController.text,
       ownerFullName: _ownerFullNameController.text,
+      ownerPhone: _ownerPhoneController.text.trim().isEmpty ? null : _ownerPhoneController.text.trim(),
       ownerUsername: _ownerUsernameController.text,
       ownerPassword: _ownerPasswordController.text,
     );
+
+    if (!localSuccess) {
+      if (mounted) setState(() => _isProcessing = false);
+      return;
+    }
+
+    // Optional Cloud API Hardware Registration
+    if (_registerWithCloud) {
+      final cloudService = ref.read(cloudLicenseServiceProvider);
+      final tradeLicense = _licenseController.text.trim().isNotEmpty
+          ? _licenseController.text.trim()
+          : 'TL-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch % 10000}';
+
+      final regResult = await cloudService.registerPharmacy(
+        pharmacyName: _pharmacyNameController.text,
+        tradeLicenseNumber: tradeLicense,
+        pharmacyAddress: _addressController.text.trim(),
+        pharmacyPhone: _phoneController.text.trim(),
+        mapLocationUrl: _mapPinController.text.trim().isEmpty ? null : _mapPinController.text.trim(),
+        ownerName: _ownerFullNameController.text.trim(),
+        ownerPhone: _ownerPhoneController.text.trim(),
+        ownerEmail: _ownerEmailController.text.trim().isEmpty ? null : _ownerEmailController.text.trim(),
+        password: _ownerPasswordController.text,
+        passwordConfirmation: _confirmPasswordController.text,
+      );
+
+      if (regResult.success && regResult.licenseKey != null) {
+        await cloudService.validateLicense();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.accent,
+              content: Text('Cloud License Bound: ${regResult.licenseKey}'),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: AppColors.warning,
+              content: Text('Local store active. Cloud Notice: ${regResult.message}'),
+            ),
+          );
+        }
+      }
+    }
+
+    if (mounted) setState(() => _isProcessing = false);
   }
 
   @override
@@ -191,9 +253,10 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                 const SizedBox(height: 14),
                                 _buildTextField(
                                   controller: _addressController,
-                                  label: 'Physical Address',
+                                  label: 'Physical Address *',
                                   icon: Icons.location_on_outlined,
                                   maxLines: 2,
+                                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                                 ),
                                 const SizedBox(height: 14),
                                 _buildTextField(
@@ -201,6 +264,12 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                   label: 'Currency Symbol *',
                                   icon: Icons.attach_money,
                                   validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                                ),
+                                const SizedBox(height: 14),
+                                _buildTextField(
+                                  controller: _mapPinController,
+                                  label: 'Map Pin Link (Google Maps)',
+                                  icon: Icons.pin_drop_outlined,
                                 ),
                               ],
                             ),
@@ -236,6 +305,19 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                 ),
                                 const SizedBox(height: 14),
                                 _buildTextField(
+                                  controller: _ownerPhoneController,
+                                  label: 'Owner Phone (Personal / Private) *',
+                                  icon: Icons.phone_android_outlined,
+                                  validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                                ),
+                                const SizedBox(height: 14),
+                                _buildTextField(
+                                  controller: _ownerEmailController,
+                                  label: 'Owner Email (Cloud Recovery)',
+                                  icon: Icons.email_outlined,
+                                ),
+                                const SizedBox(height: 14),
+                                _buildTextField(
                                   controller: _ownerUsernameController,
                                   label: 'Username (Admin Login) *',
                                   icon: Icons.alternate_email,
@@ -256,7 +338,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                   ),
                                   validator: (v) {
                                     if (v == null || v.isEmpty) return 'Password is required';
-                                    if (v.length < 6) return 'Must be at least 6 characters';
+                                    if (v.length < 8) return 'Must be at least 8 characters';
                                     return null;
                                   },
                                 ),
@@ -282,7 +364,40 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                   },
                                   onFieldSubmitted: (_) => _submitSetup(),
                                 ),
-                                const SizedBox(height: 20),
+                                const SizedBox(height: 16),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Checkbox(
+                                        value: _registerWithCloud,
+                                        activeColor: AppColors.primary,
+                                        onChanged: (v) => setState(() => _registerWithCloud = v ?? true),
+                                      ),
+                                      const Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Register & Bind Device to Cloud API',
+                                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
+                                            ),
+                                            Text(
+                                              'Enforces 1-device license binding with cloud backup capability.',
+                                              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
@@ -324,7 +439,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             ),
-                            icon: authState.isSubmitting
+                            icon: (_isProcessing || authState.isSubmitting)
                                 ? const SizedBox(
                                     width: 18,
                                     height: 18,
@@ -332,10 +447,12 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                   )
                                 : const Icon(Icons.check_circle_outline),
                             label: Text(
-                              authState.isSubmitting ? 'Initializing Pharmacy...' : 'Complete Setup & Enter System',
+                              (_isProcessing || authState.isSubmitting)
+                                  ? 'Initializing Pharmacy & Cloud...'
+                                  : 'Complete Setup & Enter System',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
-                            onPressed: authState.isSubmitting ? null : _submitSetup,
+                            onPressed: (_isProcessing || authState.isSubmitting) ? null : _submitSetup,
                           ),
                         ],
                       ),

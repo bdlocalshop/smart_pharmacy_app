@@ -27,6 +27,7 @@ dependencies:
   speech_to_text: ^7.5.0
   sherpa_onnx: 1.13.8
   record: ^7.1.2
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

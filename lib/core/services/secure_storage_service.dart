@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:uuid/uuid.dart';
 import '../../features/auth/domain/user_session.dart';
 
 /// Secure storage wrapper interface to allow testing without desktop platform channels.
@@ -60,9 +61,53 @@ class SecureStorageService {
   final ISecureStorageClient _client;
 
   static const String _keySession = 'smart_pharmacy_active_session_v1';
+  static const String _keyDeviceUuid = 'smart_pharmacy_device_uuid';
+  static const String _keyCloudLicenseKey = 'smart_pharmacy_cloud_license_key';
+  static const String _keyCloudClientSecret = 'smart_pharmacy_cloud_client_secret';
+  static const String _keyCloudSessionToken = 'smart_pharmacy_cloud_session_token';
+  static const String _keyCloudPharmacyId = 'smart_pharmacy_cloud_pharmacy_id';
 
   SecureStorageService([ISecureStorageClient? client])
       : _client = client ?? FlutterSecureStorageClient();
+
+  /// Gets or initializes persistent hardware device UUID for hardware-binding.
+  Future<String> getOrCreateDeviceUuid() async {
+    final existing = await _client.read(key: _keyDeviceUuid);
+    if (existing != null && existing.isNotEmpty) {
+      return existing;
+    }
+    final newUuid = 'hw_${DateTime.now().millisecondsSinceEpoch}_${Uuid().v4().substring(0, 8)}';
+    await _client.write(key: _keyDeviceUuid, value: newUuid);
+    return newUuid;
+  }
+
+  Future<void> saveCloudCredentials({
+    required String licenseKey,
+    required String clientSecret,
+    String? pharmacyId,
+    String? sessionToken,
+  }) async {
+    await _client.write(key: _keyCloudLicenseKey, value: licenseKey);
+    await _client.write(key: _keyCloudClientSecret, value: clientSecret);
+    if (pharmacyId != null) {
+      await _client.write(key: _keyCloudPharmacyId, value: pharmacyId);
+    }
+    if (sessionToken != null) {
+      await _client.write(key: _keyCloudSessionToken, value: sessionToken);
+    }
+  }
+
+  Future<String?> getCloudLicenseKey() => _client.read(key: _keyCloudLicenseKey);
+  Future<String?> getCloudClientSecret() => _client.read(key: _keyCloudClientSecret);
+  Future<String?> getCloudSessionToken() => _client.read(key: _keyCloudSessionToken);
+  Future<String?> getCloudPharmacyId() => _client.read(key: _keyCloudPharmacyId);
+
+  Future<void> clearCloudCredentials() async {
+    await _client.delete(key: _keyCloudLicenseKey);
+    await _client.delete(key: _keyCloudClientSecret);
+    await _client.delete(key: _keyCloudSessionToken);
+    await _client.delete(key: _keyCloudPharmacyId);
+  }
 
   /// Persists user session in desktop secure credentials manager.
   Future<void> saveSession(UserSession session) async {

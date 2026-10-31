@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:drift/drift.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import '../../core/constants/app_constants.dart';
@@ -9,13 +10,17 @@ import 'connection/connection.dart';
 /// Manages rolling automated startup snapshots, retention pruning (14 days),
 /// and one-click database export/import operations.
 class DatabaseBackupManager {
-  final Directory? customBackupDir;
+  Directory? customBackupDir;
   final File? customDbFile;
 
   DatabaseBackupManager({
     this.customBackupDir,
     this.customDbFile,
   });
+
+  void setCustomBackupDirectory(Directory? dir) {
+    customBackupDir = dir;
+  }
 
   /// Executes automated rolling backup on application startup.
   /// Prunes existing backup files older than [retentionDays] (default 14 days).
@@ -165,23 +170,147 @@ class DatabaseBackupManager {
       }
     }
 
-    // 3. Close current database to release file locks on Windows
-    await currentDb.close();
+    // 3. In-place atomic schema & data restoration via SQLite ATTACH DATABASE
+    // This avoids Windows OS file-locking deadlocks on active background isolates and stream watchers.
+    final sanitizedBackupPath = backupFile.path.replaceAll(r'\', '/');
+    await currentDb.customStatement("ATTACH DATABASE '$sanitizedBackupPath' AS backup_source;");
+    await currentDb.customStatement('PRAGMA foreign_keys = OFF;');
+    try {
+      await currentDb.transaction(() async {
+        final tablesResult = await currentDb.customSelect(
+          "SELECT name FROM backup_source.sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';",
+        ).get();
 
-    // 4. Overwrite main SQLite file
-    await backupFile.copy(targetDbFile.path);
+        for (final row in tablesResult) {
+          final tableName = row.data['name'] as String;
+          // Verify table exists in current database schema
+          final mainTableCheck = await currentDb.customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name = '$tableName';",
+          ).get();
+          if (mainTableCheck.isNotEmpty) {
+            await currentDb.customStatement('DELETE FROM main."$tableName";');
+            await currentDb.customStatement('INSERT INTO main."$tableName" SELECT * FROM backup_source."$tableName";');
+          }
+        }
+      });
+    } finally {
+      await currentDb.customStatement('PRAGMA foreign_keys = ON;');
+      try {
+        await currentDb.customStatement('DETACH DATABASE backup_source;');
+      } catch (_) {}
+    }
 
-    // 5. Clean stale WAL & SHM files to prevent state mismatch
-    final walFile = File('${targetDbFile.path}-wal');
-    final shmFile = File('${targetDbFile.path}-shm');
-    if (await walFile.exists()) await walFile.delete();
-    if (await shmFile.exists()) await shmFile.delete();
+    // 4. Notify reactive Drift streams so all active UI watchers immediately refresh
+    try {
+      currentDb.notifyUpdates(
+        currentDb.allTables.map((t) => TableUpdate.onTable(t, kind: UpdateKind.update)).toSet(),
+      );
+    } catch (_) {}
 
     return RestoreResult(
       restoredFrom: backupFile,
       safetyBackup: safetyBackupFile,
       restoredAt: DateTime.now(),
     );
+  }
+
+  /// Resolves the designated backup directory.
+  Future<Directory> getBackupDirectory() async {
+    final dir = customBackupDir ?? await getDefaultBackupDirectory();
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+    return dir;
+  }
+
+  /// Lists all SQLite backup archives (.sqlite and .db) in the backup directory,
+  /// sorted chronologically descending with the most recent backup at the top.
+  Future<List<BackupFileInfo>> listBackups() async {
+    final dir = await getBackupDirectory();
+    if (!dir.existsSync()) return [];
+
+    final entities = dir.listSync();
+    final results = <BackupFileInfo>[];
+
+    for (final entity in entities) {
+      if (entity is File) {
+        final ext = p.extension(entity.path).toLowerCase();
+        if (ext == '.sqlite' || ext == '.db') {
+          final stat = entity.statSync();
+          results.add(BackupFileInfo(
+            file: entity,
+            fileName: p.basename(entity.path),
+            byteSize: stat.size,
+            modifiedTime: stat.modified,
+          ));
+        }
+      }
+    }
+
+    // Sort descending by modified time (most recent first at the top)
+    results.sort((a, b) => b.modifiedTime.compareTo(a.modifiedTime));
+    return results;
+  }
+
+  /// Creates a full SQLite backup snapshot with the current timestamp
+  /// in the designated backup directory (e.g. backup_smart_pharmacy_YYYYMMDD_HHmmss.sqlite).
+  Future<File> createTimestampedBackup(AppDatabase db) async {
+    final backupDir = await getBackupDirectory();
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final backupFileName = 'backup_smart_pharmacy_$timestamp.sqlite';
+    final backupFile = File(p.join(backupDir.path, backupFileName));
+
+    try {
+      await _vacuumInto(db, backupFile);
+    } catch (_) {
+      // Fallback: WAL checkpoint then file copy
+      await db.customStatement('PRAGMA wal_checkpoint(TRUNCATE);');
+      final dbFile = customDbFile ?? await getDefaultDatabaseFile();
+      await dbFile.copy(backupFile.path);
+    }
+
+    if (!await backupFile.exists() || await backupFile.length() == 0) {
+      throw DatabaseBackupException('Failed to create complete database backup archive.');
+    }
+
+    return backupFile;
+  }
+
+  /// Opens the backup directory or highlights a specific backup file in the OS file explorer (Windows Explorer).
+  Future<void> openBackupDirectoryInExplorer([File? targetFile]) async {
+    final dir = await getBackupDirectory();
+    try {
+      if (Platform.isWindows) {
+        if (targetFile != null && await targetFile.exists()) {
+          final winPath = p.normalize(targetFile.path);
+          await Process.run('explorer.exe', ['/select,', winPath]);
+        } else {
+          final winPath = p.normalize(dir.path);
+          await Process.run('explorer.exe', [winPath]);
+        }
+      } else if (Platform.isMacOS) {
+        if (targetFile != null && await targetFile.exists()) {
+          await Process.run('open', ['-R', targetFile.path]);
+        } else {
+          await Process.run('open', [dir.path]);
+        }
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [dir.path]);
+      }
+    } catch (_) {
+      // Non-fatal if system shell explorer fails to open
+    }
+  }
+
+  /// Deletes a specific backup file from the repository.
+  Future<bool> deleteBackup(File file) async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 
   /// Executes VACUUM INTO using escaped forward slashes for cross-platform SQLite compatibility.
@@ -240,4 +369,30 @@ class RestoreResult {
     required this.restoredAt,
   });
 }
+
+/// Encapsulates metadata of a discovered SQLite database backup archive.
+class BackupFileInfo {
+  final File file;
+  final String fileName;
+  final int byteSize;
+  final DateTime modifiedTime;
+
+  BackupFileInfo({
+    required this.file,
+    required this.fileName,
+    required this.byteSize,
+    required this.modifiedTime,
+  });
+
+  String get formattedSize {
+    if (byteSize < 1024) return '$byteSize B';
+    if (byteSize < 1024 * 1024) return '${(byteSize / 1024).toStringAsFixed(1)} KB';
+    return '${(byteSize / (1024 * 1024)).toStringAsFixed(2)} MB';
+  }
+
+  String get formattedDate {
+    return DateFormat('yyyy-MM-dd HH:mm:ss').format(modifiedTime);
+  }
+}
+
 

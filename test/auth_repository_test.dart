@@ -48,7 +48,10 @@ void main() {
         pharmacyName: 'City Central Pharmacy',
         contactPhone: '+1-555-0100',
         licenseNumber: 'LIC-2026',
+        address: '742 Evergreen Terrace, Medical District',
+        mapPinUrl: 'https://maps.google.com/?q=23.8103,90.4125',
         ownerFullName: 'Dr. John Doe',
+        ownerPhone: '+1-555-PERSONAL',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',
       );
@@ -63,13 +66,24 @@ void main() {
       final storedSession = await secureStorage.getSession();
       expect(storedSession, isNotNull);
       expect(storedSession!.userId, equals(session.userId));
+
+      // Verify owner personal phone is recorded in usersTable
+      final userRecord = await (db.select(db.usersTable)..where((u) => u.id.equals(session.userId))).getSingle();
+      expect(userRecord.phone, equals('+1-555-PERSONAL'));
       expect(storedSession.role, equals(UserRole.owner));
+
+      // Verify address and mapPinUrl in pharmacySettingsTable
+      final pharmacyRecord = await authRepo.getPharmacySettings();
+      expect(pharmacyRecord, isNotNull);
+      expect(pharmacyRecord!.address, equals('742 Evergreen Terrace, Medical District'));
+      expect(pharmacyRecord.mapPinUrl, equals('https://maps.google.com/?q=23.8103,90.4125'));
     });
 
     test('setupInitialPharmacy rejects subsequent setup calls (idempotent)', () async {
       await authRepo.setupInitialPharmacy(
         pharmacyName: 'First Pharmacy',
         contactPhone: '+1-555-0100',
+        address: 'First St',
         ownerFullName: 'Dr. John Doe',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',
@@ -79,6 +93,7 @@ void main() {
         () => authRepo.setupInitialPharmacy(
           pharmacyName: 'Second Pharmacy',
           contactPhone: '+1-555-0200',
+          address: 'Second St',
           ownerFullName: 'Another Owner',
           ownerUsername: 'owner2',
           ownerPassword: 'password123',
@@ -91,6 +106,7 @@ void main() {
       await authRepo.setupInitialPharmacy(
         pharmacyName: 'City Central Pharmacy',
         contactPhone: '+1-555-0100',
+        address: 'Main St',
         ownerFullName: 'Dr. John Doe',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',
@@ -118,6 +134,7 @@ void main() {
       await authRepo.setupInitialPharmacy(
         pharmacyName: 'City Central Pharmacy',
         contactPhone: '+1-555-0100',
+        address: 'Main St',
         ownerFullName: 'Dr. John Doe',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',
@@ -138,6 +155,7 @@ void main() {
       final initialSession = await authRepo.setupInitialPharmacy(
         pharmacyName: 'City Central Pharmacy',
         contactPhone: '+1-555-0100',
+        address: 'Main St',
         ownerFullName: 'Dr. John Doe',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',
@@ -178,6 +196,7 @@ void main() {
       await authRepo.setupInitialPharmacy(
         pharmacyName: 'City Central Pharmacy',
         contactPhone: '+1-555-0100',
+        address: 'Main St',
         ownerFullName: 'Dr. John Doe',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',
@@ -195,6 +214,7 @@ void main() {
       final initialSession = await authRepo.setupInitialPharmacy(
         pharmacyName: 'City Central Pharmacy',
         contactPhone: '+1-555-0100',
+        address: 'Main St',
         ownerFullName: 'Dr. John Doe',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',

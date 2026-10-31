@@ -266,6 +266,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.border),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           Container(
@@ -287,47 +288,60 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
             ),
           ),
           ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: allItems.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final item = allItems[i];
-              final b = item.batch;
-              final p = item.product;
-              final days = item.daysUntilExpiry;
-              final isExpired = days < 0;
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: allItems.length,
+                    separatorBuilder: (context, index) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final item = allItems[i];
+                      final b = item.batch;
+                      final p = item.product;
+                      final days = item.daysUntilExpiry;
+                      final isExpired = days < 0;
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: Row(
-                  children: [
-                    // Brand & Generic
-                    Expanded(
-                      flex: 3,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(p.brandName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                          Text(p.genericName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                        ],
-                      ),
-                    ),
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        child: Row(
+                          children: [
+                            // Brand & Generic
+                            Expanded(
+                              flex: 3,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    p.brandName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    p.genericName,
+                                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
 
-                    // Physical Shelf Locator
-                    Expanded(
-                      flex: 2,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.shelves, size: 16, color: AppColors.primary),
-                          const SizedBox(width: 6),
-                          Text(
-                            p.shelfLocation,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryDark),
-                          ),
-                        ],
-                      ),
-                    ),
+                            // Physical Shelf Locator
+                            Expanded(
+                              flex: 2,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.shelves, size: 16, color: AppColors.primary),
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(
+                                      p.shelfLocation,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.primaryDark),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
 
                     // Batch # & Supplier
                     Expanded(

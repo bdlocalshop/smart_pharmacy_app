@@ -112,9 +112,11 @@ class AuthController extends Notifier<AuthState> {
     required String pharmacyName,
     required String contactPhone,
     String? licenseNumber,
-    String? address,
+    required String address,
+    String? mapPinUrl,
     String currencySymbol = '৳',
     required String ownerFullName,
+    String? ownerPhone,
     required String ownerUsername,
     required String ownerPassword,
   }) async {
@@ -126,8 +128,10 @@ class AuthController extends Notifier<AuthState> {
         contactPhone: contactPhone,
         licenseNumber: licenseNumber,
         address: address,
+        mapPinUrl: mapPinUrl,
         currencySymbol: currencySymbol,
         ownerFullName: ownerFullName,
+        ownerPhone: ownerPhone,
         ownerUsername: ownerUsername,
         ownerPassword: ownerPassword,
       );
@@ -190,6 +194,22 @@ class AuthController extends Notifier<AuthState> {
       status: AuthStatus.unauthenticated,
       pharmacySetting: pharmacy,
     );
+  }
+
+  /// Silently refreshes pharmacy settings and active session after database restore
+  /// without changing AuthStatus to loading (which would unmount the app shell).
+  Future<void> reloadAfterRestore() async {
+    try {
+      final pharmacy = await _authRepo.getPharmacySettings();
+      final restoredSession = await _authRepo.restoreSession();
+      if (restoredSession != null) {
+        state = state.copyWith(
+          status: AuthStatus.authenticated,
+          session: restoredSession,
+          pharmacySetting: pharmacy,
+        );
+      }
+    } catch (_) {}
   }
 
   void clearError() {

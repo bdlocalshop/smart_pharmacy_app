@@ -15,9 +15,11 @@ abstract class IAuthRepository {
     required String pharmacyName,
     required String contactPhone,
     String? licenseNumber,
-    String? address,
+    required String address,
+    String? mapPinUrl,
     String currencySymbol = '৳',
     required String ownerFullName,
+    String? ownerPhone,
     required String ownerUsername,
     required String ownerPassword,
   });

@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:csv/csv.dart';
 
 /// Single medicine item parsed from CSV ready for catalog insertion.
@@ -283,11 +282,6 @@ class CsvMedicineImporter {
       totalRowsParsed: totalDataRows,
       skippedReasons: skippedReasons,
     );
-  }
-
-  static bool _matches(String text, List<String> patterns) {
-    final clean = text.replaceAll(RegExp(r'[^a-zA-Z0-9]'), ' ').trim().toLowerCase();
-    return patterns.any((p) => clean.contains(p.toLowerCase()));
   }
 
   static String? _getValue(List<dynamic> row, int index) {

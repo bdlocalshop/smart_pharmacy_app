@@ -98,29 +98,29 @@ class ReportsView extends ConsumerWidget {
                               size: 15,
                               color: activeFilter == DatePeriodFilter.custom
                                   ? AppColors.primary
-                                  : AppColors.textPrimary,
+                                  : const Color(0xFF0F172A),
                             ),
                             label: Text(
                               activeFilter == DatePeriodFilter.custom
                                   ? 'Custom: ${dateOnly.format(state.activeRange.start)} - ${dateOnly.format(state.activeRange.end)}'
                                   : strings.customRange,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: activeFilter == DatePeriodFilter.custom
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                color: activeFilter == DatePeriodFilter.custom
-                                    ? AppColors.primaryDark
-                                    : AppColors.textPrimary,
-                              ),
+                            ),
+                            labelStyle: TextStyle(
+                              fontSize: 12,
+                              fontWeight: activeFilter == DatePeriodFilter.custom
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
+                              color: activeFilter == DatePeriodFilter.custom
+                                  ? AppColors.primaryDark
+                                  : const Color(0xFF0F172A),
                             ),
                             backgroundColor: activeFilter == DatePeriodFilter.custom
                                 ? AppColors.primary.withValues(alpha: 0.15)
-                                : AppColors.surface,
+                                : Colors.white,
                             side: BorderSide(
                               color: activeFilter == DatePeriodFilter.custom
                                   ? AppColors.primary
-                                  : AppColors.border,
+                                  : const Color(0xFF94A3B8),
                               width: 1.2,
                             ),
                             onPressed: () async {

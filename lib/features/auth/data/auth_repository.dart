@@ -23,7 +23,9 @@ class AuthRepository implements IAuthRepository {
   @override
   Future<bool> isPharmacyConfigured() async {
     final settings = await db.select(db.pharmacySettingsTable).get();
-    return settings.isNotEmpty;
+    if (settings.isEmpty) return false;
+    final users = await (db.select(db.usersTable)..where((tbl) => tbl.deletedAt.isNull())).get();
+    return users.isNotEmpty;
   }
 
   @override
@@ -36,14 +38,17 @@ class AuthRepository implements IAuthRepository {
     required String pharmacyName,
     required String contactPhone,
     String? licenseNumber,
-    String? address,
+    required String address,
+    String? mapPinUrl,
     String currencySymbol = AppConstants.defaultCurrencySymbol,
     required String ownerFullName,
+    String? ownerPhone,
     required String ownerUsername,
     required String ownerPassword,
   }) async {
     final existingSettings = await getPharmacySettings();
-    if (existingSettings != null) {
+    final existingUsers = await (db.select(db.usersTable)..where((tbl) => tbl.deletedAt.isNull())).get();
+    if (existingSettings != null && existingUsers.isNotEmpty) {
       throw AppException('Pharmacy has already been initialized on this device.');
     }
 
@@ -55,25 +60,42 @@ class AuthRepository implements IAuthRepository {
       throw AppException('Owner password must be at least 6 characters.');
     }
 
-    final pharmacyUid = _uuid.v4();
+    final pharmacyUid = existingSettings?.pharmacyUid ?? _uuid.v4();
     final ownerId = _uuid.v4();
     final now = DateTime.now();
     final passwordHash = PasswordHasher.hashPassword(ownerPassword);
 
     await db.transaction(() async {
-      // 1. Insert Pharmacy Settings
-      await db.into(db.pharmacySettingsTable).insert(
-            PharmacySettingsTableCompanion(
-              pharmacyUid: Value(pharmacyUid),
-              pharmacyName: Value(pharmacyName.trim()),
-              licenseNumber: Value(licenseNumber?.trim()),
-              contactPhone: Value(contactPhone.trim()),
-              address: Value(address?.trim()),
-              currencySymbol: Value(currencySymbol.trim()),
-              createdAt: Value(now),
-              updatedAt: Value(now),
-            ),
-          );
+      // 1. Insert or Update Pharmacy Settings
+      if (existingSettings == null) {
+        await db.into(db.pharmacySettingsTable).insert(
+              PharmacySettingsTableCompanion(
+                pharmacyUid: Value(pharmacyUid),
+                pharmacyName: Value(pharmacyName.trim()),
+                licenseNumber: Value(licenseNumber?.trim()),
+                contactPhone: Value(contactPhone.trim()),
+                address: Value(address.trim()),
+                mapPinUrl: Value(mapPinUrl?.trim()),
+                currencySymbol: Value(currencySymbol.trim()),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
+      } else {
+        await (db.update(db.pharmacySettingsTable)
+              ..where((tbl) => tbl.pharmacyUid.equals(pharmacyUid)))
+            .write(
+          PharmacySettingsTableCompanion(
+            pharmacyName: Value(pharmacyName.trim()),
+            licenseNumber: Value(licenseNumber?.trim()),
+            contactPhone: Value(contactPhone.trim()),
+            address: Value(address.trim()),
+            mapPinUrl: Value(mapPinUrl?.trim()),
+            currencySymbol: Value(currencySymbol.trim()),
+            updatedAt: Value(now),
+          ),
+        );
+      }
 
       // 2. Insert Master Owner User
       await db.into(db.usersTable).insert(
@@ -81,6 +103,7 @@ class AuthRepository implements IAuthRepository {
               id: Value(ownerId),
               pharmacyUid: Value(pharmacyUid),
               fullName: Value(ownerFullName.trim()),
+              phone: Value(ownerPhone?.trim()),
               username: Value(trimmedUsername),
               passwordHash: Value(passwordHash),
               role: const Value(AppConstants.roleOwner),

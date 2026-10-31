@@ -182,6 +182,7 @@ void main() {
       final ownerSession = await authRepo.setupInitialPharmacy(
         pharmacyName: 'Central Care',
         contactPhone: '+880 1717-449639',
+        address: '742 Evergreen Terrace',
         ownerFullName: 'Dr. Jenkins',
         ownerUsername: 'admin',
         ownerPassword: 'adminPassword123',

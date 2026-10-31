@@ -29,7 +29,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -44,6 +44,13 @@ class AppDatabase extends _$AppDatabase {
               await m.addColumn(usersTable, usersTable.phone);
             }
           }
+          if (from < 3) {
+            final pharmacyColumns = await customSelect('PRAGMA table_info(pharmacy_settings);').get();
+            final hasMapPin = pharmacyColumns.any((col) => col.data['name'] == 'map_pin_url');
+            if (!hasMapPin) {
+              await m.addColumn(pharmacySettingsTable, pharmacySettingsTable.mapPinUrl);
+            }
+          }
         },
         beforeOpen: (details) async {
           // Additional integrity and pragmatic checks
@@ -53,6 +60,13 @@ class AppDatabase extends _$AppDatabase {
           } catch (_) {
             // Table might not exist yet on initial run
           }
+          try {
+            final pharmacyColumns = await customSelect('PRAGMA table_info(pharmacy_settings);').get();
+            final hasMapPin = pharmacyColumns.any((col) => col.data['name'] == 'map_pin_url');
+            if (!hasMapPin) {
+              await customStatement('ALTER TABLE pharmacy_settings ADD COLUMN map_pin_url TEXT;');
+            }
+          } catch (_) {}
         },
       );
 }

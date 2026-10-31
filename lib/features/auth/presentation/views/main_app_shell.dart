@@ -1,3 +1,5 @@
+import '../../../../core/config/app_config.dart';
+import '../../../../core/network/cloud_license_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
@@ -12,6 +14,7 @@ import 'package:smart_pharmacy_app/features/auth/presentation/widgets/rbac_guard
 import 'package:smart_pharmacy_app/features/inventory/presentation/views/medicines_master_view.dart';
 import 'package:smart_pharmacy_app/features/pos/presentation/views/pos_billing_view.dart';
 import 'package:smart_pharmacy_app/features/reports/presentation/views/reports_view.dart';
+import 'database_backups_view.dart';
 
 /// Main Desktop App Shell with responsive sidebar and dynamic RBAC menu items.
 class MainAppShell extends ConsumerStatefulWidget {
@@ -299,6 +302,84 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                 ],
                               ),
                             ),
+                            const SizedBox(width: 10),
+                            // Cloud API Status Pill
+                            InkWell(
+                              onTap: () async {
+                                final cloudService = ref.read(cloudLicenseServiceProvider);
+                                final status = await cloudService.checkStatus();
+                                if (!context.mounted) return;
+                                showDialog(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                    title: const Row(
+                                      children: [
+                                        Icon(Icons.cloud_done_outlined, color: AppColors.primary),
+                                        SizedBox(width: 8),
+                                        Text('Cloud License & Server Status'),
+                                      ],
+                                    ),
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('API Endpoint: ${AppConfig.apiBaseUrl}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                                        const SizedBox(height: 12),
+                                        Text('Server Connection: ${status.success ? "CONNECTED" : "OFFLINE / UNREACHABLE"}',
+                                            style: TextStyle(fontWeight: FontWeight.bold, color: status.success ? AppColors.accent : AppColors.alertCritical)),
+                                        if (status.licenseStatus != null)
+                                          Text('License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)'),
+                                        if (status.verificationStatus != null)
+                                          Text('Verification: ${status.verificationStatus!.toUpperCase()}'),
+                                      ],
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.of(ctx).pop(),
+                                        child: const Text('Close'),
+                                      ),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                                        onPressed: () async {
+                                          Navigator.of(ctx).pop();
+                                          final val = await cloudService.validateLicense();
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text(val.message ?? 'Validated')),
+                                            );
+                                          }
+                                        },
+                                        child: const Text('Validate License (HMAC)'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.cloud_queue, color: AppColors.primary, size: 14),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      'Cloud Sync Active',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.primaryDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                             const SizedBox(width: 14),
                             _buildRoleBadge(role, isDetailed: true, strings: strings),
                           ],
@@ -572,19 +653,26 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         const SizedBox(width: 8),
                         u.role == 'OWNER'
                             ? Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surface,
+                                  color: const Color(0xFFFEF3C7),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: AppColors.border, width: 1.2),
+                                  border: Border.all(color: const Color(0xFFD97706), width: 1.2),
                                 ),
-                                child: Text(
-                                  strings.masterOwnerBadge,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.verified_user, size: 14, color: Color(0xFFB45309)),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      strings.masterOwnerBadge,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF78350F),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               )
                             : Switch(
@@ -609,46 +697,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   // --- Tab 5: Database Maintenance (Owner Only) ---
   Widget _buildDatabaseTab() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.security, color: AppColors.primary, size: 28),
-                SizedBox(width: 12),
-                Text('Database Recovery & Rolling Backups', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Automated rolling snapshots occur on every startup with 14-day rolling retention. As the Owner, you can perform immediate hot snapshots, USB flash exports, or verified database restorations.',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                  icon: const Icon(Icons.save_alt, size: 18),
-                  label: const Text('Export Immediate Backup (.sqlite)'),
-                  onPressed: () {},
-                ),
-                const SizedBox(width: 16),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.alertCritical),
-                  icon: const Icon(Icons.restore, size: 18),
-                  label: const Text('Restore Database Archive'),
-                  onPressed: () {},
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
+    return const DatabaseBackupsView();
   }
 
   void _showAddUserDialog(BuildContext context) {

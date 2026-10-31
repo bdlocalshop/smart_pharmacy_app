@@ -50,3 +50,9 @@ app.*.map.json
 # Deployment files
 /SmartPharmacy_v1.0.0_Windows_Installer/
 *.zip
+phd_workingnotes.txt
+
+# Local Environment Configuration (use config.example.json as template)
+config.json
+config.local.json
+.env*

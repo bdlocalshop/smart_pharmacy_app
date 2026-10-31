@@ -22,11 +22,11 @@ final appInitializationProvider = FutureProvider<AppInitializationState>((ref) a
   final db = ref.read(databaseProvider);
   final backupManager = ref.read(backupManagerProvider);
 
-  // 1. Seed database if first launch
+  // 1. Seed database if first launch (without demo users)
   bool wasSeeded = false;
   try {
     final seeder = DatabaseSeeder(db);
-    wasSeeded = await seeder.seedIfEmpty();
+    wasSeeded = await seeder.seedIfEmpty(seedUsers: false);
   } catch (_) {
     // Non-fatal: continue even if seed query throws
   }

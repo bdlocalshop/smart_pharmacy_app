@@ -64,6 +64,17 @@ class $PharmacySettingsTableTable extends PharmacySettingsTable
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _mapPinUrlMeta = const VerificationMeta(
+    'mapPinUrl',
+  );
+  @override
+  late final GeneratedColumn<String> mapPinUrl = GeneratedColumn<String>(
+    'map_pin_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _currencySymbolMeta = const VerificationMeta(
     'currencySymbol',
   );
@@ -74,7 +85,7 @@ class $PharmacySettingsTableTable extends PharmacySettingsTable
     false,
     type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultValue: const Constant('\$'),
+    defaultValue: const Constant('৳'),
   );
   @override
   late final GeneratedColumnWithTypeConverter<DateTime, String> createdAt =
@@ -105,6 +116,7 @@ class $PharmacySettingsTableTable extends PharmacySettingsTable
     licenseNumber,
     contactPhone,
     address,
+    mapPinUrl,
     currencySymbol,
     createdAt,
     updatedAt,
@@ -169,6 +181,12 @@ class $PharmacySettingsTableTable extends PharmacySettingsTable
         address.isAcceptableOrUnknown(data['address']!, _addressMeta),
       );
     }
+    if (data.containsKey('map_pin_url')) {
+      context.handle(
+        _mapPinUrlMeta,
+        mapPinUrl.isAcceptableOrUnknown(data['map_pin_url']!, _mapPinUrlMeta),
+      );
+    }
     if (data.containsKey('currency_symbol')) {
       context.handle(
         _currencySymbolMeta,
@@ -207,6 +225,10 @@ class $PharmacySettingsTableTable extends PharmacySettingsTable
         DriftSqlType.string,
         data['${effectivePrefix}address'],
       ),
+      mapPinUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}map_pin_url'],
+      ),
       currencySymbol: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}currency_symbol'],
@@ -243,6 +265,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
   final String? licenseNumber;
   final String contactPhone;
   final String? address;
+  final String? mapPinUrl;
   final String currencySymbol;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -252,6 +275,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
     this.licenseNumber,
     required this.contactPhone,
     this.address,
+    this.mapPinUrl,
     required this.currencySymbol,
     required this.createdAt,
     required this.updatedAt,
@@ -267,6 +291,9 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
     map['contact_phone'] = Variable<String>(contactPhone);
     if (!nullToAbsent || address != null) {
       map['address'] = Variable<String>(address);
+    }
+    if (!nullToAbsent || mapPinUrl != null) {
+      map['map_pin_url'] = Variable<String>(mapPinUrl);
     }
     map['currency_symbol'] = Variable<String>(currencySymbol);
     {
@@ -293,6 +320,9 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
       address: address == null && nullToAbsent
           ? const Value.absent()
           : Value(address),
+      mapPinUrl: mapPinUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mapPinUrl),
       currencySymbol: Value(currencySymbol),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -310,6 +340,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
       licenseNumber: serializer.fromJson<String?>(json['licenseNumber']),
       contactPhone: serializer.fromJson<String>(json['contactPhone']),
       address: serializer.fromJson<String?>(json['address']),
+      mapPinUrl: serializer.fromJson<String?>(json['mapPinUrl']),
       currencySymbol: serializer.fromJson<String>(json['currencySymbol']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -324,6 +355,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
       'licenseNumber': serializer.toJson<String?>(licenseNumber),
       'contactPhone': serializer.toJson<String>(contactPhone),
       'address': serializer.toJson<String?>(address),
+      'mapPinUrl': serializer.toJson<String?>(mapPinUrl),
       'currencySymbol': serializer.toJson<String>(currencySymbol),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -336,6 +368,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
     Value<String?> licenseNumber = const Value.absent(),
     String? contactPhone,
     Value<String?> address = const Value.absent(),
+    Value<String?> mapPinUrl = const Value.absent(),
     String? currencySymbol,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -347,6 +380,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
         : this.licenseNumber,
     contactPhone: contactPhone ?? this.contactPhone,
     address: address.present ? address.value : this.address,
+    mapPinUrl: mapPinUrl.present ? mapPinUrl.value : this.mapPinUrl,
     currencySymbol: currencySymbol ?? this.currencySymbol,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -366,6 +400,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
           ? data.contactPhone.value
           : this.contactPhone,
       address: data.address.present ? data.address.value : this.address,
+      mapPinUrl: data.mapPinUrl.present ? data.mapPinUrl.value : this.mapPinUrl,
       currencySymbol: data.currencySymbol.present
           ? data.currencySymbol.value
           : this.currencySymbol,
@@ -382,6 +417,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
           ..write('licenseNumber: $licenseNumber, ')
           ..write('contactPhone: $contactPhone, ')
           ..write('address: $address, ')
+          ..write('mapPinUrl: $mapPinUrl, ')
           ..write('currencySymbol: $currencySymbol, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
@@ -396,6 +432,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
     licenseNumber,
     contactPhone,
     address,
+    mapPinUrl,
     currencySymbol,
     createdAt,
     updatedAt,
@@ -409,6 +446,7 @@ class PharmacySetting extends DataClass implements Insertable<PharmacySetting> {
           other.licenseNumber == this.licenseNumber &&
           other.contactPhone == this.contactPhone &&
           other.address == this.address &&
+          other.mapPinUrl == this.mapPinUrl &&
           other.currencySymbol == this.currencySymbol &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
@@ -420,6 +458,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
   final Value<String?> licenseNumber;
   final Value<String> contactPhone;
   final Value<String?> address;
+  final Value<String?> mapPinUrl;
   final Value<String> currencySymbol;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -430,6 +469,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
     this.licenseNumber = const Value.absent(),
     this.contactPhone = const Value.absent(),
     this.address = const Value.absent(),
+    this.mapPinUrl = const Value.absent(),
     this.currencySymbol = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -441,6 +481,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
     this.licenseNumber = const Value.absent(),
     required String contactPhone,
     this.address = const Value.absent(),
+    this.mapPinUrl = const Value.absent(),
     this.currencySymbol = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
@@ -456,6 +497,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
     Expression<String>? licenseNumber,
     Expression<String>? contactPhone,
     Expression<String>? address,
+    Expression<String>? mapPinUrl,
     Expression<String>? currencySymbol,
     Expression<String>? createdAt,
     Expression<String>? updatedAt,
@@ -467,6 +509,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
       if (licenseNumber != null) 'license_number': licenseNumber,
       if (contactPhone != null) 'contact_phone': contactPhone,
       if (address != null) 'address': address,
+      if (mapPinUrl != null) 'map_pin_url': mapPinUrl,
       if (currencySymbol != null) 'currency_symbol': currencySymbol,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -480,6 +523,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
     Value<String?>? licenseNumber,
     Value<String>? contactPhone,
     Value<String?>? address,
+    Value<String?>? mapPinUrl,
     Value<String>? currencySymbol,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -491,6 +535,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
       licenseNumber: licenseNumber ?? this.licenseNumber,
       contactPhone: contactPhone ?? this.contactPhone,
       address: address ?? this.address,
+      mapPinUrl: mapPinUrl ?? this.mapPinUrl,
       currencySymbol: currencySymbol ?? this.currencySymbol,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -515,6 +560,9 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
     }
     if (address.present) {
       map['address'] = Variable<String>(address.value);
+    }
+    if (mapPinUrl.present) {
+      map['map_pin_url'] = Variable<String>(mapPinUrl.value);
     }
     if (currencySymbol.present) {
       map['currency_symbol'] = Variable<String>(currencySymbol.value);
@@ -543,6 +591,7 @@ class PharmacySettingsTableCompanion extends UpdateCompanion<PharmacySetting> {
           ..write('licenseNumber: $licenseNumber, ')
           ..write('contactPhone: $contactPhone, ')
           ..write('address: $address, ')
+          ..write('mapPinUrl: $mapPinUrl, ')
           ..write('currencySymbol: $currencySymbol, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -5215,6 +5264,7 @@ typedef $$PharmacySettingsTableTableCreateCompanionBuilder =
       Value<String?> licenseNumber,
       required String contactPhone,
       Value<String?> address,
+      Value<String?> mapPinUrl,
       Value<String> currencySymbol,
       required DateTime createdAt,
       required DateTime updatedAt,
@@ -5227,6 +5277,7 @@ typedef $$PharmacySettingsTableTableUpdateCompanionBuilder =
       Value<String?> licenseNumber,
       Value<String> contactPhone,
       Value<String?> address,
+      Value<String?> mapPinUrl,
       Value<String> currencySymbol,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -5412,6 +5463,11 @@ class $$PharmacySettingsTableTableFilterComposer
 
   ColumnFilters<String> get address => $composableBuilder(
     column: $table.address,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mapPinUrl => $composableBuilder(
+    column: $table.mapPinUrl,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5617,6 +5673,11 @@ class $$PharmacySettingsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mapPinUrl => $composableBuilder(
+    column: $table.mapPinUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get currencySymbol => $composableBuilder(
     column: $table.currencySymbol,
     builder: (column) => ColumnOrderings(column),
@@ -5664,6 +5725,9 @@ class $$PharmacySettingsTableTableAnnotationComposer
 
   GeneratedColumn<String> get address =>
       $composableBuilder(column: $table.address, builder: (column) => column);
+
+  GeneratedColumn<String> get mapPinUrl =>
+      $composableBuilder(column: $table.mapPinUrl, builder: (column) => column);
 
   GeneratedColumn<String> get currencySymbol => $composableBuilder(
     column: $table.currencySymbol,
@@ -5880,6 +5944,7 @@ class $$PharmacySettingsTableTableTableManager
                 Value<String?> licenseNumber = const Value.absent(),
                 Value<String> contactPhone = const Value.absent(),
                 Value<String?> address = const Value.absent(),
+                Value<String?> mapPinUrl = const Value.absent(),
                 Value<String> currencySymbol = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -5890,6 +5955,7 @@ class $$PharmacySettingsTableTableTableManager
                 licenseNumber: licenseNumber,
                 contactPhone: contactPhone,
                 address: address,
+                mapPinUrl: mapPinUrl,
                 currencySymbol: currencySymbol,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -5902,6 +5968,7 @@ class $$PharmacySettingsTableTableTableManager
                 Value<String?> licenseNumber = const Value.absent(),
                 required String contactPhone,
                 Value<String?> address = const Value.absent(),
+                Value<String?> mapPinUrl = const Value.absent(),
                 Value<String> currencySymbol = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
@@ -5912,6 +5979,7 @@ class $$PharmacySettingsTableTableTableManager
                 licenseNumber: licenseNumber,
                 contactPhone: contactPhone,
                 address: address,
+                mapPinUrl: mapPinUrl,
                 currencySymbol: currencySymbol,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

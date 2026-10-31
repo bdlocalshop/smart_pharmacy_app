@@ -233,9 +233,55 @@ class AppStrings {
 
   // --- Database Backups View ---
   String get dbMaintenanceTitle => isBn ? 'ডেটাবেস রক্ষণাবেক্ষণ ও ব্যাকআপ' : 'Database Maintenance & Backups';
+  String get dbRecoveryRollingBackups => isBn ? 'ডেটাবেস রিকভারি ও রোলিং ব্যাকআপ' : 'Database Recovery & Rolling Backups';
+  String get dbRecoverySubtitle => isBn
+      ? 'প্রতিটি স্টার্টআপে ১৪ দিনের রোলিং রিটেনশন সহ স্বয়ংক্রিয় স্ন্যাপশট নেওয়া হয়। মালিক হিসেবে আপনি তাৎক্ষণিক স্ন্যাপশট, এক্সপোর্ট বা ডাটাবেস রিস্টোর করতে পারেন।'
+      : 'Automated rolling snapshots occur on every startup with 14-day rolling retention. As the Owner, you can perform immediate hot snapshots, USB flash exports, or verified database restorations.';
+  String get exportImmediateBackup => isBn ? 'তাৎক্ষণিক ব্যাকআপ তৈরি করুন (.sqlite)' : 'Export Immediate Backup (.sqlite)';
+  String get restoreDatabaseArchive => isBn ? 'ডাটাবেস সংরক্ষণাগার রিস্টোর' : 'Restore Database Archive';
+  String get openBackupFolder => isBn ? 'ব্যাকআপ ফোল্ডার খুলুন' : 'Open Backup Folder';
+  String get backupDirectoryLabel => isBn ? 'ব্যাকআপ ফোল্ডার ডিরেক্টরি:' : 'Backup Directory:';
+  String get savedArchivesHeader => isBn ? 'সংরক্ষিত ব্যাকআপ আর্কাইভসমূহ' : 'Saved Backup Archives';
+  String get savedArchivesSubtitle => isBn
+      ? 'নির্ধারিত ব্যাকআপ ফোল্ডারে উপস্থিত সমস্ত SQLite ব্যাকআপ ফাইল (সাম্প্রতিকটি প্রথমে)।'
+      : 'All SQLite database backup archives found in the designated backup directory (newest first).';
+  String get noBackupsFound => isBn
+      ? 'ব্যাকআপ ফোল্ডারে কোনো ডেটাবেস আর্কাইভ ফাইল পাওয়া যায়নি।'
+      : 'No database backup archives found in the designated backup folder.';
+  String get refreshBackupsTooltip => isBn ? 'তালিকা রিফ্রেশ করুন' : 'Refresh Backup List';
+  String get openInExplorerTooltip => isBn ? 'ফোল্ডারে এই ফাইলটি দেখুন' : 'Show file in Explorer';
+  String get restoreThisArchiveTooltip => isBn ? 'এই ব্যাকআপটি রিস্টোর করুন' : 'Restore from this backup';
+  String get deleteBackupTooltip => isBn ? 'ব্যাকআপ মুছুন' : 'Delete Backup';
+  String get restoreWarningTitle => isBn ? 'ডাটাবেস সংরক্ষণাগার রিস্টোর করবেন?' : 'Restore Database Archive?';
+  String get restoreWarningMessage => isBn
+      ? 'সতর্কতা: সংরক্ষণাগার থেকে ডাটাবেস রিস্টোর করলে বর্তমান সমস্ত ডেটা মুছে ফেলা হবে এবং ব্যাকআপের ডেটা দ্বারা প্রতিস্থাপিত হবে!\n\nআপনি কি নিশ্চিত যে আপনি এগিয়ে যেতে চান এবং ব্যাকআপ ফাইল নির্বাচন করতে চান?'
+      : 'WARNING: Restoring the database will permanently remove and overwrite all existing data (current sales, inventory, and user records) with data from the backup archive!\n\nDo you want to proceed and choose the backup file to restore?';
+  String get restoreSpecificWarningMessage => isBn
+      ? 'সতর্কতা: এই সংরক্ষণাগারটি রিস্টোর করলে বর্তমান সমস্ত ডেটা মুছে ফেলা হবে এবং প্রতিস্থাপিত হবে!\n\nআপনি কি নিশ্চিত যে আপনি এগিয়ে যেতে চান?'
+      : 'WARNING: Restoring this archive will permanently remove and overwrite all existing data!\n\nAre you sure you want to proceed?';
+  String get cancelBtn => isBn ? 'বাতিল' : 'Cancel';
+  String get okBtn => isBn ? 'ঠিক আছে' : 'OK';
+  String get backupCreatedSuccess => isBn ? 'ডাটাবেস ব্যাকআপ সফলভাবে তৈরি হয়েছে:' : 'Database backup created successfully:';
+  String get databaseRestoredSuccess => isBn ? 'সংরক্ষণাগার থেকে ডাটাবেস সফলভাবে রিস্টোর হয়েছে!' : 'Database restored successfully from archive!';
+  String get creatingBackupWait => isBn ? 'ব্যাকআপ তৈরি করা হচ্ছে...' : 'Creating database backup...';
+  String get restoringDatabaseWait => isBn ? 'ডাটাবেস রিস্টোর করা হচ্ছে...' : 'Restoring database archive...';
+  String get deleteBackupConfirmTitle => isBn ? 'ব্যাকআপ ফাইলটি মুছবেন?' : 'Delete Backup File?';
+  String get deleteBackupConfirmMsg => isBn ? 'আপনি কি নিশ্চিত যে এই ব্যাকআপ ফাইলটি স্থায়ীভাবে মুছে ফেলতে চান?' : 'Are you sure you want to permanently delete this backup file?';
+  String get fileNameCol => isBn ? 'ফাইলের নাম' : 'File Name';
+  String get createdTimeCol => isBn ? 'তৈরির সময়' : 'Created / Modified';
+  String get fileSizeCol => isBn ? 'সাইজ' : 'Size';
+  String get actionsCol => isBn ? 'অ্যাকশন' : 'Actions';
   String get createBackupBtn => isBn ? 'এখনই ব্যাকআপ তৈরি করুন' : 'Create Backup Now';
   String get restoreDbBtn => isBn ? 'ডেটাবেস রিস্টোর করুন' : 'Restore Database';
   String get exportDbFileBtn => isBn ? 'ডেটাবেস ফাইল এক্সপোর্ট' : 'Export Database File';
+  String get latestBackupBadge => isBn ? 'সাম্প্রতিক' : 'Latest';
+  String get changeBackupFolderBtn => isBn ? 'ফোল্ডার পরিবর্তন' : 'Change Folder';
+  String get resetToDefaultFolderBtn => isBn ? 'ডিফল্ট ফোল্ডার' : 'Reset to Default';
+  String get customFolderBadge => isBn ? 'কাস্টম' : 'Custom';
+  String get defaultFolderBadge => isBn ? 'ডিফল্ট' : 'Default';
+  String get selectBackupDirectoryTitle => isBn ? 'ব্যাকআপ সংরক্ষণের ফোল্ডার নির্বাচন করুন' : 'Select Backup Storage Directory';
+  String get backupFolderChangedSuccess => isBn ? 'ব্যাকআপ ফোল্ডার আপডেট করা হয়েছে:' : 'Backup directory changed to:';
+  String get backupFolderResetSuccess => isBn ? 'ডিফল্ট ব্যাকআপ ফোল্ডারে রিসেট করা হয়েছে।' : 'Backup directory reset to default.';
 
   // --- Login Screen ---
   String get signInToTerminal => isBn ? 'টার্মিনালে সাইন ইন করুন' : 'Sign In to Terminal';

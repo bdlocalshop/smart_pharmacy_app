@@ -214,6 +214,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                 borderRadius: BorderRadius.circular(12),
                 side: const BorderSide(color: AppColors.border),
               ),
+              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   // Table Header
@@ -259,15 +260,17 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Wrap(
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    spacing: 8,
-                                    runSpacing: 4,
+                                  Row(
                                     children: [
-                                      Text(
-                                        p.brandName,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                      Flexible(
+                                        child: Text(
+                                          p.brandName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
+                                      const SizedBox(width: 8),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                         decoration: BoxDecoration(
@@ -286,6 +289,8 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                                   Text(
                                     p.genericName,
                                     style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
@@ -297,8 +302,18 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(p.category, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                                  Text(p.manufacturer, style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
+                                  Text(
+                                    p.category,
+                                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    p.manufacturer,
+                                    style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ],
                               ),
                             ),
@@ -333,7 +348,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                                     runSpacing: 2,
                                     children: [
                                       Text(
-                                        '${item.activeStock} units',
+                                        '${item.activeStock} ${strings.unitsLabel}',
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 13,
@@ -353,7 +368,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                                         ),
                                     ],
                                   ),
-                                  Text('${strings.thresholdPrefix} ${p.minStockAlert} units', style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
+                                  Text('${strings.thresholdPrefix} ${p.minStockAlert} ${strings.unitsLabel}', style: const TextStyle(fontSize: 10, color: AppColors.textMuted)),
                                   if (item.expiredStock > 0)
                                     Text(strings.expiredCount(item.expiredStock), style: const TextStyle(fontSize: 10, color: AppColors.alertCritical, fontWeight: FontWeight.bold)),
                                 ],

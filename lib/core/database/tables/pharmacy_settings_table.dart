@@ -12,6 +12,7 @@ class PharmacySettingsTable extends Table {
   TextColumn get licenseNumber => text().nullable()();
   TextColumn get contactPhone => text()();
   TextColumn get address => text().nullable()();
+  TextColumn get mapPinUrl => text().nullable()();
   TextColumn get currencySymbol => text().withDefault(const Constant('৳'))();
   TextColumn get createdAt => text().map(const IsoDateTimeConverter())();
   TextColumn get updatedAt => text().map(const IsoDateTimeConverter())();

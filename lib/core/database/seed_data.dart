@@ -13,7 +13,7 @@ class DatabaseSeeder {
 
   /// Seeds default pharmacy settings, administrative accounts, and medicines with batches.
   /// Skips execution if database has already been initialized.
-  Future<bool> seedIfEmpty() async {
+  Future<bool> seedIfEmpty({bool seedUsers = true}) async {
     final existingSettings = await db.select(db.pharmacySettingsTable).get();
     if (existingSettings.isNotEmpty) {
       // Auto-migrate previous default demo phone to user's phone number
@@ -42,61 +42,64 @@ class DatabaseSeeder {
               licenseNumber: const Value('LIC-PHARM-2026-904'),
               contactPhone: const Value('+880 1717-449639'),
               address: const Value('742 Evergreen Terrace, Medical District, Suite 100'),
+              mapPinUrl: const Value('https://maps.google.com/?q=23.8103,90.4125'),
               currencySymbol: const Value(AppConstants.defaultCurrencySymbol),
               createdAt: Value(now),
               updatedAt: Value(now),
             ),
           );
 
-      // 2. Users (OWNER, MANAGER, SALESMAN)
+      // 2. Users (OWNER, MANAGER, SALESMAN) - Optional
       final ownerId = _uuid.v4();
       final managerId = _uuid.v4();
       final salesmanId = _uuid.v4();
 
-      await db.into(db.usersTable).insert(
-            UsersTableCompanion(
-              id: Value(ownerId),
-              pharmacyUid: Value(pharmacyUid),
-              fullName: const Value('Dr. Sarah Jenkins (Owner)'),
-              username: const Value('admin'),
-              passwordHash: Value(PasswordHasher.hashPassword('admin123')),
-              role: const Value(AppConstants.roleOwner),
-              isActive: const Value(true),
-              createdAt: Value(now),
-              updatedAt: Value(now),
-              syncStatus: const Value(AppConstants.syncSynced),
-            ),
-          );
+      if (seedUsers) {
+        await db.into(db.usersTable).insert(
+              UsersTableCompanion(
+                id: Value(ownerId),
+                pharmacyUid: Value(pharmacyUid),
+                fullName: const Value('Dr. Sarah Jenkins (Owner)'),
+                username: const Value('admin'),
+                passwordHash: Value(PasswordHasher.hashPassword('admin123')),
+                role: const Value(AppConstants.roleOwner),
+                isActive: const Value(true),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+                syncStatus: const Value(AppConstants.syncSynced),
+              ),
+            );
 
-      await db.into(db.usersTable).insert(
-            UsersTableCompanion(
-              id: Value(managerId),
-              pharmacyUid: Value(pharmacyUid),
-              fullName: const Value('Marcus Vance (Manager)'),
-              username: const Value('manager'),
-              passwordHash: Value(PasswordHasher.hashPassword('manager123')),
-              role: const Value(AppConstants.roleManager),
-              isActive: const Value(true),
-              createdAt: Value(now),
-              updatedAt: Value(now),
-              syncStatus: const Value(AppConstants.syncSynced),
-            ),
-          );
+        await db.into(db.usersTable).insert(
+              UsersTableCompanion(
+                id: Value(managerId),
+                pharmacyUid: Value(pharmacyUid),
+                fullName: const Value('Marcus Vance (Manager)'),
+                username: const Value('manager'),
+                passwordHash: Value(PasswordHasher.hashPassword('manager123')),
+                role: const Value(AppConstants.roleManager),
+                isActive: const Value(true),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+                syncStatus: const Value(AppConstants.syncSynced),
+              ),
+            );
 
-      await db.into(db.usersTable).insert(
-            UsersTableCompanion(
-              id: Value(salesmanId),
-              pharmacyUid: Value(pharmacyUid),
-              fullName: const Value('Alex Rivera (Salesman)'),
-              username: const Value('salesman'),
-              passwordHash: Value(PasswordHasher.hashPassword('sales123')),
-              role: const Value(AppConstants.roleSalesman),
-              isActive: const Value(true),
-              createdAt: Value(now),
-              updatedAt: Value(now),
-              syncStatus: const Value(AppConstants.syncSynced),
-            ),
-          );
+        await db.into(db.usersTable).insert(
+              UsersTableCompanion(
+                id: Value(salesmanId),
+                pharmacyUid: Value(pharmacyUid),
+                fullName: const Value('Alex Rivera (Salesman)'),
+                username: const Value('salesman'),
+                passwordHash: Value(PasswordHasher.hashPassword('sales123')),
+                role: const Value(AppConstants.roleSalesman),
+                isActive: const Value(true),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+                syncStatus: const Value(AppConstants.syncSynced),
+              ),
+            );
+      }
 
       // 3. Products (Medicines Master) & Batches
       // Product 1: Paracetamol 500mg
@@ -344,69 +347,71 @@ class DatabaseSeeder {
             ),
           );
 
-      // 4. Sample Completed Sale (For immediate profit calculation and sales ledger preview)
-      final saleId = _uuid.v4();
-      const invoiceNumber = 'INV-20261024-0001';
-      final saleTime = now.subtract(const Duration(hours: 2));
+      // 4. Sample Completed Sale (Only if users were seeded, references salesmanId)
+      if (seedUsers) {
+        final saleId = _uuid.v4();
+        const invoiceNumber = 'INV-20261024-0001';
+        final saleTime = now.subtract(const Duration(hours: 2));
 
-      // Items: 2 x Panadol ($2.50 selling, $1.10 cost) + 1 x Amoxil ($7.50 selling, $4.20 cost)
-      // Subtotal = $5.00 + $7.50 = $12.50, Discount = $1.00, Tax = $0.00
-      // Total Payable = $11.50
-      // Total Cost = (2 * 1.10) + (1 * 4.20) = $2.20 + $4.20 = $6.40
-      // Gross Profit = $11.50 - $6.40 = $5.10
-      await db.into(db.salesTable).insert(
-            SalesTableCompanion(
-              id: Value(saleId),
-              pharmacyUid: Value(pharmacyUid),
-              invoiceNumber: const Value(invoiceNumber),
-              cashierUserId: Value(salesmanId),
-              customerName: const Value('Jane Doe (Walk-in)'),
-              customerPhone: const Value('+1 (555) 234-5678'),
-              subtotal: const Value(12.50),
-              discountAmount: const Value(1.00),
-              taxAmount: const Value(0.00),
-              totalPayable: const Value(11.50),
-              amountTendered: const Value(20.00),
-              changeReturned: const Value(8.50),
-              paymentMethod: const Value(AppConstants.paymentCash),
-              totalCostPrice: const Value(6.40),
-              grossProfit: const Value(5.10),
-              createdAt: Value(saleTime),
-              syncStatus: const Value(AppConstants.syncSynced),
-            ),
-          );
+        // Items: 2 x Panadol ($2.50 selling, $1.10 cost) + 1 x Amoxil ($7.50 selling, $4.20 cost)
+        // Subtotal = $5.00 + $7.50 = $12.50, Discount = $1.00, Tax = $0.00
+        // Total Payable = $11.50
+        // Total Cost = (2 * 1.10) + (1 * 4.20) = $2.20 + $4.20 = $6.40
+        // Gross Profit = $11.50 - $6.40 = $5.10
+        await db.into(db.salesTable).insert(
+              SalesTableCompanion(
+                id: Value(saleId),
+                pharmacyUid: Value(pharmacyUid),
+                invoiceNumber: const Value(invoiceNumber),
+                cashierUserId: Value(salesmanId),
+                customerName: const Value('Jane Doe (Walk-in)'),
+                customerPhone: const Value('+1 (555) 234-5678'),
+                subtotal: const Value(12.50),
+                discountAmount: const Value(1.00),
+                taxAmount: const Value(0.00),
+                totalPayable: const Value(11.50),
+                amountTendered: const Value(20.00),
+                changeReturned: const Value(8.50),
+                paymentMethod: const Value(AppConstants.paymentCash),
+                totalCostPrice: const Value(6.40),
+                grossProfit: const Value(5.10),
+                createdAt: Value(saleTime),
+                syncStatus: const Value(AppConstants.syncSynced),
+              ),
+            );
 
-      await db.into(db.saleItemsTable).insert(
-            SaleItemsTableCompanion(
-              id: Value(_uuid.v4()),
-              pharmacyUid: Value(pharmacyUid),
-              saleId: Value(saleId),
-              productId: Value(prod1Id),
-              batchId: Value(batch1Id),
-              quantity: const Value(2),
-              unitCostPrice: const Value(1.10),
-              unitSellingPrice: const Value(2.50),
-              lineTotal: const Value(5.00),
-              createdAt: Value(saleTime),
-              syncStatus: const Value(AppConstants.syncSynced),
-            ),
-          );
+        await db.into(db.saleItemsTable).insert(
+              SaleItemsTableCompanion(
+                id: Value(_uuid.v4()),
+                pharmacyUid: Value(pharmacyUid),
+                saleId: Value(saleId),
+                productId: Value(prod1Id),
+                batchId: Value(batch1Id),
+                quantity: const Value(2),
+                unitCostPrice: const Value(1.10),
+                unitSellingPrice: const Value(2.50),
+                lineTotal: const Value(5.00),
+                createdAt: Value(saleTime),
+                syncStatus: const Value(AppConstants.syncSynced),
+              ),
+            );
 
-      await db.into(db.saleItemsTable).insert(
-            SaleItemsTableCompanion(
-              id: Value(_uuid.v4()),
-              pharmacyUid: Value(pharmacyUid),
-              saleId: Value(saleId),
-              productId: Value(prod2Id),
-              batchId: Value(batch3Id),
-              quantity: const Value(1),
-              unitCostPrice: const Value(4.20),
-              unitSellingPrice: const Value(7.50),
-              lineTotal: const Value(7.50),
-              createdAt: Value(saleTime),
-              syncStatus: const Value(AppConstants.syncSynced),
-            ),
-          );
+        await db.into(db.saleItemsTable).insert(
+              SaleItemsTableCompanion(
+                id: Value(_uuid.v4()),
+                pharmacyUid: Value(pharmacyUid),
+                saleId: Value(saleId),
+                productId: Value(prod2Id),
+                batchId: Value(batch3Id),
+                quantity: const Value(1),
+                unitCostPrice: const Value(4.20),
+                unitSellingPrice: const Value(7.50),
+                lineTotal: const Value(7.50),
+                createdAt: Value(saleTime),
+                syncStatus: const Value(AppConstants.syncSynced),
+              ),
+            );
+      }
     });
 
     return true;

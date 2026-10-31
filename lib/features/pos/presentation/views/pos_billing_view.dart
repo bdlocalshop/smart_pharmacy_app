@@ -672,7 +672,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                                 children: [
                                   IconButton(
                                     icon: const Icon(Icons.remove_circle_outline, size: 18),
-                                    color: isAtMinQty ? AppColors.textSecondary.withOpacity(0.3) : AppColors.textSecondary,
+                                    color: isAtMinQty ? AppColors.textSecondary.withAlpha(76) : AppColors.textSecondary,
                                     tooltip: isAtMinQty ? 'Minimum 1 unit' : 'Decrease quantity',
                                     constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                     padding: EdgeInsets.zero,
@@ -689,7 +689,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                                   const SizedBox(width: 2),
                                   IconButton(
                                     icon: const Icon(Icons.add_circle_outline, size: 18),
-                                    color: isAtMaxStock ? AppColors.textSecondary.withOpacity(0.3) : AppColors.primary,
+                                    color: isAtMaxStock ? AppColors.textSecondary.withAlpha(76) : AppColors.primary,
                                     tooltip: isAtMaxStock ? 'Max available stock: ${item.availableStock}' : 'Increase quantity',
                                     constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
                                     padding: EdgeInsets.zero,
@@ -1026,52 +1026,88 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
 
             const SizedBox(height: 10),
 
-            // Quick Cash Tender Increment Chips
+            // Quick Cash Tender Increment Buttons
             Wrap(
-              spacing: 6,
+              spacing: 8,
               runSpacing: 6,
               children: [
-                ActionChip(
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: AppColors.border, width: 1.2),
-                  label: Text(strings.exactCash, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0xFF94A3B8), width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: const Size(54, 34),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   onPressed: () {
                     _tenderedCtl.text = cart.totalPayable.toStringAsFixed(2);
                     ref.read(posCartControllerProvider.notifier).setAmountTendered(cart.totalPayable);
                   },
+                  child: Text(
+                    strings.exactCash,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
                 ),
-                ActionChip(
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: AppColors.border, width: 1.2),
-                  label: const Text('+৳10', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0xFF94A3B8), width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: const Size(54, 34),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   onPressed: () {
                     final curr = double.tryParse(_tenderedCtl.text) ?? cart.totalPayable;
                     final next = curr + 10;
                     _tenderedCtl.text = next.toStringAsFixed(2);
                     ref.read(posCartControllerProvider.notifier).setAmountTendered(next);
                   },
+                  child: const Text(
+                    '+৳10',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
                 ),
-                ActionChip(
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: AppColors.border, width: 1.2),
-                  label: const Text('+৳50', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0xFF94A3B8), width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: const Size(54, 34),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   onPressed: () {
                     final curr = double.tryParse(_tenderedCtl.text) ?? cart.totalPayable;
                     final next = curr + 50;
                     _tenderedCtl.text = next.toStringAsFixed(2);
                     ref.read(posCartControllerProvider.notifier).setAmountTendered(next);
                   },
+                  child: const Text(
+                    '+৳50',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
                 ),
-                ActionChip(
-                  backgroundColor: AppColors.surface,
-                  side: const BorderSide(color: AppColors.border, width: 1.2),
-                  label: const Text('+৳100', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF0F172A),
+                    side: const BorderSide(color: Color(0xFF94A3B8), width: 1.2),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: const Size(54, 34),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
                   onPressed: () {
                     final curr = double.tryParse(_tenderedCtl.text) ?? cart.totalPayable;
                     final next = curr + 100;
                     _tenderedCtl.text = next.toStringAsFixed(2);
                     ref.read(posCartControllerProvider.notifier).setAmountTendered(next);
                   },
+                  child: const Text(
+                    '+৳100',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                  ),
                 ),
               ],
             ),
