@@ -284,6 +284,8 @@ void main() {
 
       // Verify Typeahead Search Results Panel appears
       expect(find.text('Panadol Advance 500mg'), findsOneWidget);
+      // Verify Dispensing Unit Type badge appears next to medicine name
+      expect(find.text('Tablet'), findsOneWidget);
       expect(find.text('Paracetamol • Analgesic'), findsOneWidget);
       // Verify Physical Shelf Location is prominently surfaced
       expect(find.text('Rack A-12'), findsOneWidget);

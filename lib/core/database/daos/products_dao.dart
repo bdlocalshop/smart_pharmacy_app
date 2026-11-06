@@ -53,6 +53,35 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
         .get();
   }
 
+  /// Returns a reactive stream of distinct dispensing unit types found in the active catalog.
+  Stream<List<String>> watchDistinctUnitTypes(String pharmacyUid) {
+    final query = selectOnly(productsTable, distinct: true)
+      ..addColumns([productsTable.unitType])
+      ..where(productsTable.pharmacyUid.equals(pharmacyUid) & productsTable.deletedAt.isNull())
+      ..orderBy([OrderingTerm(expression: productsTable.unitType, mode: OrderingMode.asc)]);
+
+    return query.watch().map((rows) => rows
+        .map((r) => r.read(productsTable.unitType))
+        .whereType<String>()
+        .where((u) => u.trim().isNotEmpty)
+        .toList());
+  }
+
+  /// Fetches distinct dispensing unit types found in the active catalog.
+  Future<List<String>> getDistinctUnitTypes(String pharmacyUid) async {
+    final query = selectOnly(productsTable, distinct: true)
+      ..addColumns([productsTable.unitType])
+      ..where(productsTable.pharmacyUid.equals(pharmacyUid) & productsTable.deletedAt.isNull())
+      ..orderBy([OrderingTerm(expression: productsTable.unitType, mode: OrderingMode.asc)]);
+
+    final rows = await query.get();
+    return rows
+        .map((r) => r.read(productsTable.unitType))
+        .whereType<String>()
+        .where((u) => u.trim().isNotEmpty)
+        .toList();
+  }
+
   /// Inserts a new medicine into the catalog.
   Future<void> insertProduct(ProductsTableCompanion product) {
     return into(productsTable).insert(product);

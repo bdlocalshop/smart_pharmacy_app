@@ -437,5 +437,31 @@ void main() {
       expect(lowStockItems.first.product.brandName, equals('Insulin Glargine 100IU'));
       expect(lowStockItems.first.activeStock, equals(12));
     });
+
+    test('getDistinctUnitTypes and watchDistinctUnitTypes dynamically return all unique units', () async {
+      await repo.addProduct(
+        pharmacyUid: pharmacyUid,
+        brandName: 'Napa 500mg',
+        genericName: 'Paracetamol',
+        category: 'Analgesic',
+        manufacturer: 'Beximco',
+        shelfLocation: 'Rack A-1',
+        unitType: 'Tablet',
+      );
+
+      await repo.addProduct(
+        pharmacyUid: pharmacyUid,
+        brandName: 'Amoxil 250mg',
+        genericName: 'Amoxicillin',
+        category: 'Antibiotic',
+        manufacturer: 'GSK',
+        shelfLocation: 'Rack B-2',
+        unitType: 'Oral Gel',
+      );
+
+      final units = await repo.getDistinctUnitTypes(pharmacyUid);
+      expect(units.contains('Tablet'), isTrue);
+      expect(units.contains('Oral Gel'), isTrue);
+    });
   });
 }

@@ -13,12 +13,18 @@ abstract class IInventoryRepository {
     required String category,
     required String manufacturer,
     required String shelfLocation,
-    String unitType = 'Tablet',
+    String unitType = 'Unknown',
     int minStockAlert = 10,
   });
 
   /// Fetches all active non-deleted products for duplicate checking.
   Future<List<Product>> getActiveProducts(String pharmacyUid);
+
+  /// Returns a reactive stream of distinct dispensing unit types found in the active catalog.
+  Stream<List<String>> watchDistinctUnitTypes(String pharmacyUid);
+
+  /// Fetches distinct dispensing unit types found in the active catalog.
+  Future<List<String>> getDistinctUnitTypes(String pharmacyUid);
 
   /// Inserts multiple medicines in a single atomic database batch transaction.
   Future<int> addMultipleProducts({

@@ -309,11 +309,30 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    p.brandName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          p.brandName,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.surfaceElevated,
+                                          borderRadius: BorderRadius.circular(4),
+                                          border: Border.all(color: AppColors.border),
+                                        ),
+                                        child: Text(
+                                          p.unitType,
+                                          style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   Text(
                                     p.genericName,
@@ -510,7 +529,30 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(p.brandName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  p.brandName,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceElevated,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: Text(
+                                  p.unitType,
+                                  style: const TextStyle(fontSize: 10, color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
                           Text(p.genericName, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
                         ],
                       ),

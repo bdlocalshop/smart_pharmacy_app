@@ -4,6 +4,7 @@ import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
 import 'package:smart_pharmacy_app/core/database/app_database.dart';
 import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_controller.dart';
 import '../controllers/inventory_controller.dart';
+import '../../domain/unit_normalizer.dart';
 import 'csv_import_dialog.dart';
 
 /// Modal dialog for adding or editing a medicine in the master catalog.
@@ -25,10 +26,12 @@ class _MedicineDialogState extends ConsumerState<MedicineDialog> {
   late final TextEditingController _manufacturerCtl;
   late final TextEditingController _shelfLocationCtl;
   late final TextEditingController _minStockCtl;
-  String _selectedUnitType = 'Tablet';
+  String _selectedUnitType = 'Unknown';
   bool _isSaving = false;
+  final Set<String> _customUnits = {};
 
-  final List<String> _unitTypes = const [
+  static const List<String> _baseUnitTypes = [
+    'Unknown',
     'Tablet',
     'Capsule',
     'Strip',
@@ -37,6 +40,14 @@ class _MedicineDialogState extends ConsumerState<MedicineDialog> {
     'Box',
     'Vial',
     'Ointment',
+    'Oral Gel',
+    'Suppository',
+    'Drop',
+    'Injection',
+    'Inhaler',
+    'Cream',
+    'Powder',
+    'Sachet',
   ];
 
   final List<String> _commonCategories = const [
@@ -61,8 +72,10 @@ class _MedicineDialogState extends ConsumerState<MedicineDialog> {
     _manufacturerCtl = TextEditingController(text: p?.manufacturer ?? '');
     _shelfLocationCtl = TextEditingController(text: p?.shelfLocation ?? 'Rack A-1');
     _minStockCtl = TextEditingController(text: '${p?.minStockAlert ?? 10}');
-    if (p != null && _unitTypes.contains(p.unitType)) {
-      _selectedUnitType = p.unitType;
+    if (p != null && p.unitType.trim().isNotEmpty) {
+      _selectedUnitType = p.unitType.trim();
+    } else {
+      _selectedUnitType = 'Unknown';
     }
   }
 
@@ -144,9 +157,74 @@ class _MedicineDialogState extends ConsumerState<MedicineDialog> {
     }
   }
 
+  Future<void> _promptAddCustomUnit() async {
+    final ctl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    final customUnit = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Custom Dispensing Unit Type'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: ctl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Unit Type Name *',
+              hintText: 'e.g. Ampoule, Patch, Nebule, Sachet',
+            ),
+            validator: (v) => v == null || v.trim().isEmpty ? 'Please enter a unit name' : null,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(ctx, ctl.text.trim());
+              }
+            },
+            child: const Text('Add Unit Type'),
+          ),
+        ],
+      ),
+    );
+
+    if (customUnit != null && customUnit.isNotEmpty) {
+      final normalized = UnitNormalizer.normalize(customUnit);
+      setState(() {
+        _customUnits.add(normalized);
+        _selectedUnitType = normalized;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.existingProduct != null;
+    final dbUnits = ref.watch(distinctUnitTypesProvider).value ?? const [];
+
+    // Dynamically assemble unique unit types with 'Unknown' guaranteed as the first item
+    final unitOptions = <String>[
+      'Unknown',
+      ..._baseUnitTypes.skip(1),
+      ...dbUnits.where((u) => u.toLowerCase() != 'unknown'),
+      ..._customUnits.where((u) => u.toLowerCase() != 'unknown'),
+      if (widget.existingProduct != null &&
+          widget.existingProduct!.unitType.trim().isNotEmpty &&
+          widget.existingProduct!.unitType.toLowerCase() != 'unknown')
+        widget.existingProduct!.unitType.trim(),
+    ];
+
+    final seen = <String>{};
+    final uniqueUnitTypes = <String>[];
+    for (final u in unitOptions) {
+      final key = u.trim().toLowerCase();
+      if (seen.add(key)) {
+        uniqueUnitTypes.add(u.trim());
+      }
+    }
 
     return AlertDialog(
       title: Row(
@@ -251,14 +329,49 @@ class _MedicineDialogState extends ConsumerState<MedicineDialog> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        initialValue: _selectedUnitType,
+                        key: ValueKey('unit_type_$_selectedUnitType'),
+                        isExpanded: true,
+                        initialValue: uniqueUnitTypes.contains(_selectedUnitType) ? _selectedUnitType : 'Unknown',
                         decoration: const InputDecoration(
                           labelText: 'Dispensing Unit Type',
                           prefixIcon: Icon(Icons.local_pharmacy_outlined, size: 20),
                         ),
-                        items: _unitTypes.map((u) => DropdownMenuItem(value: u, child: Text(u))).toList(),
+                        items: [
+                          ...uniqueUnitTypes.map((u) => DropdownMenuItem(
+                                value: u,
+                                child: Text(
+                                  u,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontWeight: u == 'Unknown' ? FontWeight.w600 : FontWeight.normal,
+                                    color: u == 'Unknown' ? Colors.orange.shade800 : null,
+                                  ),
+                                ),
+                              )),
+                          const DropdownMenuItem(
+                            value: '__custom__',
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.add_circle_outline, size: 16, color: AppColors.primary),
+                                SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    '+ Custom Unit...',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 13),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                         onChanged: (val) {
-                          if (val != null) setState(() => _selectedUnitType = val);
+                          if (val == '__custom__') {
+                            _promptAddCustomUnit();
+                          } else if (val != null) {
+                            setState(() => _selectedUnitType = val);
+                          }
                         },
                       ),
                     ),

@@ -63,6 +63,12 @@ class _FakeInventoryRepository implements IInventoryRepository {
   Future<List<Product>> getActiveProducts(String pharmacyUid) async => [];
 
   @override
+  Stream<List<String>> watchDistinctUnitTypes(String pharmacyUid) => const Stream.empty();
+
+  @override
+  Future<List<String>> getDistinctUnitTypes(String pharmacyUid) async => [];
+
+  @override
   Future<CsvBatchImportReport> importMedicinesWithDuplicateCheck({
     required String pharmacyUid,
     required List<ProductImportItem> parsedProducts,

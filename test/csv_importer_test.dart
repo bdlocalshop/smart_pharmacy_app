@@ -9,6 +9,8 @@ import 'package:smart_pharmacy_app/features/auth/domain/user_session.dart';
 import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_controller.dart';
 import 'package:smart_pharmacy_app/features/inventory/data/inventory_repository.dart';
 import 'package:smart_pharmacy_app/features/inventory/domain/csv_medicine_importer.dart';
+import 'package:smart_pharmacy_app/features/inventory/domain/unit_normalizer.dart';
+import 'package:smart_pharmacy_app/features/inventory/presentation/controllers/inventory_controller.dart';
 import 'package:smart_pharmacy_app/features/inventory/presentation/views/csv_import_dialog.dart';
 import 'package:smart_pharmacy_app/features/inventory/presentation/views/medicine_dialog.dart';
 
@@ -73,7 +75,7 @@ Cough Drops,Menthol,,,,Syrup,invalid_number''';
       expect(m1.category, equals('Not Available'));
       expect(m1.manufacturer, equals('Not Available'));
       expect(m1.shelfLocation, equals('Rack 0-0')); // Rule: Rack 0-0
-      expect(m1.unitType, equals('Tablet'));
+      expect(m1.unitType, equals('Unknown')); // Rule: Unknown
       expect(m1.minStockAlert, equals(50)); // Rule: 50
 
       // Vitamin C: Shelf is specified, others missing
@@ -257,6 +259,7 @@ Flagyl 400mg,Metronidazole,Antibiotic,Square,Rack B-1,Tablet,50
         ProviderScope(
           overrides: [
             currentUserSessionProvider.overrideWith((ref) => session),
+            distinctUnitTypesProvider.overrideWith((ref) => Stream.value(['Unknown', 'Tablet', 'Capsule', 'Syrup'])),
           ],
           child: const MaterialApp(
             home: Scaffold(
@@ -275,6 +278,9 @@ Flagyl 400mg,Metronidazole,Antibiotic,Square,Rack B-1,Tablet,50
       final addMultipleBtn = find.byKey(const ValueKey('add_multiple_button'));
       expect(addMultipleBtn, findsOneWidget);
       expect(find.text('Add Multiple'), findsOneWidget);
+
+      // Verify default Dispensing Unit Type is "Unknown"
+      expect(find.text('Unknown'), findsOneWidget);
 
       // Verify standard buttons are also present on the right
       expect(find.text('Cancel'), findsOneWidget);
@@ -315,7 +321,89 @@ Flagyl 400mg,Metronidazole,Antibiotic,Square,Rack B-1,Tablet,50
       expect(find.textContaining('Missing Shelf Location: Automatically assigned to "Rack 0-0"'), findsOneWidget);
       expect(find.textContaining('Defaults to 50 units'), findsOneWidget);
       expect(find.textContaining('Marked as "Not Available"'), findsOneWidget);
+      expect(find.textContaining('Defaults to "Unknown"'), findsOneWidget);
+      expect(find.textContaining('Auto-Normalization & Fuzzy Matching'), findsOneWidget);
       expect(find.text('Click here to Browse & Select your CSV File'), findsOneWidget);
+    });
+  });
+
+  group('UnitNormalizer Unit & Fuzzy Matching Tests', () {
+    test('Normalizes standard shorthand and abbreviations to canonical names', () {
+      expect(UnitNormalizer.normalize('tabs'), equals('Tablet'));
+      expect(UnitNormalizer.normalize('tab'), equals('Tablet'));
+      expect(UnitNormalizer.normalize('TAB'), equals('Tablet'));
+      expect(UnitNormalizer.normalize('tbl.'), equals('Tablet'));
+      expect(UnitNormalizer.normalize('cap'), equals('Capsule'));
+      expect(UnitNormalizer.normalize('caps'), equals('Capsule'));
+      expect(UnitNormalizer.normalize('cap.'), equals('Capsule'));
+      expect(UnitNormalizer.normalize('syr'), equals('Syrup'));
+      expect(UnitNormalizer.normalize('susp'), equals('Suspension'));
+      expect(UnitNormalizer.normalize('inj'), equals('Injection'));
+      expect(UnitNormalizer.normalize('inj.'), equals('Injection'));
+      expect(UnitNormalizer.normalize('oint'), equals('Ointment'));
+      expect(UnitNormalizer.normalize('crm'), equals('Cream'));
+      expect(UnitNormalizer.normalize('oral gel'), equals('Oral Gel'));
+      expect(UnitNormalizer.normalize('oralgel'), equals('Oral Gel'));
+      expect(UnitNormalizer.normalize('drp'), equals('Drop'));
+      expect(UnitNormalizer.normalize('eye drops'), equals('Eye Drop'));
+      expect(UnitNormalizer.normalize('inh'), equals('Inhaler'));
+      expect(UnitNormalizer.normalize('supp'), equals('Suppository'));
+      expect(UnitNormalizer.normalize('btl'), equals('Bottle'));
+      expect(UnitNormalizer.normalize('pcs'), equals('Piece'));
+      expect(UnitNormalizer.normalize('boxes'), equals('Box'));
+      expect(UnitNormalizer.normalize('strips'), equals('Strip'));
+    });
+
+    test('Maps missing or unknown placeholders to "Unknown"', () {
+      expect(UnitNormalizer.normalize(null), equals('Unknown'));
+      expect(UnitNormalizer.normalize(''), equals('Unknown'));
+      expect(UnitNormalizer.normalize('   '), equals('Unknown'));
+      expect(UnitNormalizer.normalize('unk'), equals('Unknown'));
+      expect(UnitNormalizer.normalize('unknown'), equals('Unknown'));
+      expect(UnitNormalizer.normalize('n/a'), equals('Unknown'));
+      expect(UnitNormalizer.normalize('NA'), equals('Unknown'));
+      expect(UnitNormalizer.normalize('none'), equals('Unknown'));
+      expect(UnitNormalizer.normalize('-'), equals('Unknown'));
+      expect(UnitNormalizer.normalize('--'), equals('Unknown'));
+    });
+
+    test('Corrects typos via fuzzy matching (Levenshtein distance)', () {
+      // 1-character typos
+      expect(UnitNormalizer.normalize('tablett'), equals('Tablet'));
+      expect(UnitNormalizer.normalize('tablt'), equals('Tablet'));
+      expect(UnitNormalizer.normalize('capusel'), equals('Capsule'));
+      expect(UnitNormalizer.normalize('inhalor'), equals('Inhaler'));
+      expect(UnitNormalizer.normalize('oinment'), equals('Ointment'));
+      expect(UnitNormalizer.normalize('suppositry'), equals('Suppository'));
+      expect(UnitNormalizer.normalize('suspesion'), equals('Suspension'));
+    });
+
+    test('Preserves or title-cases novel custom units and acronyms', () {
+      expect(UnitNormalizer.normalize('sublingual wafer'), equals('Sublingual Wafer'));
+      expect(UnitNormalizer.normalize('transdermal patch'), equals('Patch'));
+      expect(UnitNormalizer.normalize('PFS'), equals('PFS'));
+    });
+
+    test('CSV Importer normalizes variants and prevents duplicate variants', () {
+      const csvData = '''Brand / Commercial Name,Generic Formula,Therapeutic Category,Manufacturer / Brand Pharma,Physical Shelf Location,Dispensing Unit Type,Minimum Reorder Alert Threshold
+Panadol 500mg,Paracetamol,Analgesic,GSK,Rack A-1,tabs,50
+Napa 500mg,Paracetamol,Analgesic,Beximco,Rack A-2,cap.,30
+Panadol 500mg,Paracetamol,Analgesic,GSK,Rack A-1,Tablet,50
+Amoxil 250mg,Amoxicillin,Antibiotic,Pfizer,Rack B-3,syr,15''';
+
+      final result = CsvMedicineImporter.parseCsv(csvData);
+      // Row 1: Panadol tabs -> Normalized to 'Tablet' (Valid)
+      // Row 2: Napa cap. -> Normalized to 'Capsule' (Valid)
+      // Row 3: Panadol Tablet -> Identical to Row 1 after normalization! (Duplicate skipped)
+      // Row 4: Amoxil syr -> Normalized to 'Syrup' (Valid)
+      expect(result.validProducts.length, equals(3));
+      expect(result.skippedCount, equals(1));
+      expect(result.inCsvDuplicateCount, equals(1));
+
+      expect(result.validProducts[0].unitType, equals('Tablet'));
+      expect(result.validProducts[1].unitType, equals('Capsule'));
+      expect(result.validProducts[2].unitType, equals('Syrup'));
+      expect(result.skippedReasons.first, contains('Duplicate in CSV file'));
     });
   });
 }

@@ -62,10 +62,16 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
         csvContent = utf8.decode(bytes);
       }
 
-      final parsed = CsvMedicineImporter.parseCsv(csvContent);
+      final session = ref.read(currentUserSessionProvider);
+      List<String>? knownUnits;
+      if (session != null) {
+        final repo = ref.read(inventoryRepositoryProvider);
+        knownUnits = await repo.getDistinctUnitTypes(session.pharmacyUid);
+      }
+
+      final parsed = CsvMedicineImporter.parseCsv(csvContent, knownUnitTypes: knownUnits);
 
       // Check against active database records for existing duplicates
-      final session = ref.read(currentUserSessionProvider);
       int dbDupes = 0;
       final previewSkipped = List<CsvSkippedItem>.from(parsed.skippedItems);
 
@@ -286,11 +292,12 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                     ),
                     SizedBox(height: 6),
                     Text('• Duplicate Detection: Items with matching "Brand Name" AND "Dispensing Unit Type" are automatically identified and skipped.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                    Text('• Auto-Normalization & Fuzzy Matching: Shorthand & typos in units are automatically unified (e.g. "tabs" -> "Tablet", "cap" -> "Capsule", "inj" -> "Injection").', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Missing Brand/Commercial Name: Row is skipped (NOT uploaded).', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Missing Shelf Location: Automatically assigned to "Rack 0-0".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Missing or Invalid Reorder Alert Threshold: Defaults to 50 units.', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Other Missing Information (Generic, Category, Manufacturer): Marked as "Not Available".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
-                    Text('• Missing Dispensing Unit Type: Defaults to "Tablet".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
+                    Text('• Missing Dispensing Unit Type: Defaults to "Unknown".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                   ],
                 ),
               ),

@@ -1,4 +1,5 @@
 import 'package:csv/csv.dart';
+import 'unit_normalizer.dart';
 
 /// Single medicine item parsed from CSV ready for catalog insertion.
 class ProductImportItem {
@@ -11,22 +12,23 @@ class ProductImportItem {
   final String unitType;
   final int minStockAlert;
 
-  const ProductImportItem({
+  ProductImportItem({
     this.sourceRowNumber = 0,
     required this.brandName,
     this.genericName = 'Not Available',
     this.category = 'Not Available',
     this.manufacturer = 'Not Available',
     this.shelfLocation = 'Rack 0-0',
-    this.unitType = 'Tablet',
+    String unitType = 'Unknown',
     this.minStockAlert = 50,
-  });
+  }) : unitType = UnitNormalizer.normalize(unitType);
 
   /// Unique key used to identify duplicates (Brand Name & Dispensing Unit Type).
   String get duplicateKey => buildDuplicateKey(brandName, unitType);
 
   static String buildDuplicateKey(String brand, String unit) {
-    return '${brand.trim().toLowerCase()}|${unit.trim().toLowerCase()}';
+    final normalizedUnit = UnitNormalizer.normalize(unit);
+    return '${brand.trim().toLowerCase()}|${normalizedUnit.toLowerCase()}';
   }
 
   @override
@@ -122,12 +124,12 @@ class CsvBatchImportReport {
 /// - Missing Shelf Location -> Defaults to 'Rack 0-0'
 /// - Missing or invalid Minimum Threshold -> Defaults to 50
 /// - Other missing info (Generic, Category, Manufacturer) -> Defaults to 'Not Available'
-/// - Missing Unit Type -> Defaults to 'Tablet'
+/// - Missing Unit Type -> Defaults to 'Unknown'
 class CsvMedicineImporter {
   static const String defaultShelfLocation = 'Rack 0-0';
   static const int defaultMinStockAlert = 50;
   static const String defaultNotAvailable = 'Not Available';
-  static const String defaultUnitType = 'Tablet';
+  static const String defaultUnitType = 'Unknown';
 
   /// Standard CSV Header Template
   static const List<String> csvHeaders = [
@@ -195,7 +197,10 @@ class CsvMedicineImporter {
   }
 
   /// Parses raw CSV content string into a structured [CsvImportResult].
-  static CsvImportResult parseCsv(String rawCsvContent) {
+  static CsvImportResult parseCsv(
+    String rawCsvContent, {
+    Iterable<String>? knownUnitTypes,
+  }) {
     if (rawCsvContent.trim().isEmpty) {
       return const CsvImportResult(
         validProducts: [],
@@ -322,7 +327,10 @@ class CsvMedicineImporter {
             manufacturer:
                 _getValue(row, manufacturerIdx) ?? defaultNotAvailable,
             shelfLocation: _getValue(row, shelfIdx) ?? defaultShelfLocation,
-            unitType: _getValue(row, unitIdx) ?? defaultUnitType,
+            unitType: UnitNormalizer.normalize(
+              _getValue(row, unitIdx),
+              knownUnits: knownUnitTypes,
+            ),
             minStockAlert:
                 _getValue(row, thresholdIdx) ?? defaultMinStockAlert.toString(),
             reason: 'Brand / Commercial Name is missing.',
@@ -364,11 +372,12 @@ class CsvMedicineImporter {
           ? rawShelf.trim()
           : defaultShelfLocation;
 
-      // Unit Type: if missing -> "Tablet"
+      // Unit Type: auto-normalized & fuzzy-matched against canonical standards and known units
       final rawUnit = _getValue(row, unitIdx);
-      final unitType = (rawUnit != null && rawUnit.trim().isNotEmpty)
-          ? rawUnit.trim()
-          : defaultUnitType;
+      final unitType = UnitNormalizer.normalize(
+        rawUnit,
+        knownUnits: knownUnitTypes,
+      );
 
       // Minimum Reorder Alert Threshold: if missing or invalid -> 50
       final rawThreshold = _getValue(row, thresholdIdx);

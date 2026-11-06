@@ -6,6 +6,7 @@ import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
 
 import '../domain/csv_medicine_importer.dart';
 import '../domain/inventory_repository_interface.dart';
+import '../domain/unit_normalizer.dart';
 
 /// Exception thrown when attempting to delete a medicine that still has unsold stock.
 class UnsoldStockException implements Exception {
@@ -45,7 +46,7 @@ class InventoryRepository implements IInventoryRepository {
     required String category,
     required String manufacturer,
     required String shelfLocation,
-    String unitType = 'Tablet',
+    String unitType = 'Unknown',
     int minStockAlert = 10,
   }) async {
     final now = DateTime.now();
@@ -58,7 +59,7 @@ class InventoryRepository implements IInventoryRepository {
         category: Value(category.trim()),
         manufacturer: Value(manufacturer.trim()),
         shelfLocation: Value(shelfLocation.trim()),
-        unitType: Value(unitType.trim()),
+        unitType: Value(UnitNormalizer.normalize(unitType)),
         minStockAlert: Value(minStockAlert),
         createdAt: Value(now),
         updatedAt: Value(now),
@@ -70,6 +71,16 @@ class InventoryRepository implements IInventoryRepository {
   @override
   Future<List<Product>> getActiveProducts(String pharmacyUid) {
     return _dao.getActiveProducts(pharmacyUid);
+  }
+
+  @override
+  Stream<List<String>> watchDistinctUnitTypes(String pharmacyUid) {
+    return _dao.watchDistinctUnitTypes(pharmacyUid);
+  }
+
+  @override
+  Future<List<String>> getDistinctUnitTypes(String pharmacyUid) {
+    return _dao.getDistinctUnitTypes(pharmacyUid);
   }
 
   @override
@@ -196,7 +207,7 @@ class InventoryRepository implements IInventoryRepository {
         category: Value(category.trim()),
         manufacturer: Value(manufacturer.trim()),
         shelfLocation: Value(shelfLocation.trim()),
-        unitType: Value(unitType.trim()),
+        unitType: Value(UnitNormalizer.normalize(unitType)),
         minStockAlert: Value(minStockAlert),
         updatedAt: Value(now),
         syncStatus: const Value(AppConstants.syncPendingUpdate),

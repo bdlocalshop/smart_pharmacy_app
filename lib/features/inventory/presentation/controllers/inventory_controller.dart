@@ -59,6 +59,14 @@ final productBatchesProvider = StreamProvider.family<List<ProductBatch>, String>
   return repo.watchBatchesForProduct(session.pharmacyUid, productId);
 });
 
+/// Stream of all distinct dispensing unit types found in the pharmacy catalog.
+final distinctUnitTypesProvider = StreamProvider<List<String>>((ref) {
+  final session = ref.watch(currentUserSessionProvider);
+  if (session == null) return const Stream.empty();
+  final repo = ref.watch(inventoryRepositoryProvider);
+  return repo.watchDistinctUnitTypes(session.pharmacyUid);
+});
+
 // --- Expiry Radar Providers ---
 
 /// Stream of strictly expired batches (critical alert - blocked from POS cart additions).

@@ -523,7 +523,35 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(p.brandName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      p.brandName,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surfaceElevated,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(color: AppColors.border),
+                                    ),
+                                    child: Text(
+                                      p.unitType,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: AppColors.textSecondary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
                               Text('${p.genericName} • ${p.category}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                             ],
                           ),
@@ -685,14 +713,40 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(p.brandName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    p.brandName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceElevated,
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: AppColors.border),
+                                  ),
+                                  child: Text(
+                                    p.unitType,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
                             Row(
                               children: [
                                 const Icon(Icons.shelves, size: 12, color: AppColors.primary),
                                 const SizedBox(width: 4),
                                 Text(p.shelfLocation, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.primaryDark)),
-                                const SizedBox(width: 8),
-                                Text('• ${p.unitType}', style: const TextStyle(fontSize: 11, color: AppColors.textMuted)),
                               ],
                             ),
                           ],
