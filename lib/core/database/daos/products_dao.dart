@@ -46,6 +46,13 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
         .getSingleOrNull();
   }
 
+  /// Fetches all active non-deleted products for a pharmacy (used for duplicate checking).
+  Future<List<Product>> getActiveProducts(String pharmacyUid) {
+    return (select(productsTable)
+          ..where((tbl) => tbl.pharmacyUid.equals(pharmacyUid) & tbl.deletedAt.isNull()))
+        .get();
+  }
+
   /// Inserts a new medicine into the catalog.
   Future<void> insertProduct(ProductsTableCompanion product) {
     return into(productsTable).insert(product);

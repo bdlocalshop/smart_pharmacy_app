@@ -60,6 +60,25 @@ class _FakeInventoryRepository implements IInventoryRepository {
   }) async => products.length;
 
   @override
+  Future<List<Product>> getActiveProducts(String pharmacyUid) async => [];
+
+  @override
+  Future<CsvBatchImportReport> importMedicinesWithDuplicateCheck({
+    required String pharmacyUid,
+    required List<ProductImportItem> parsedProducts,
+    required List<CsvSkippedItem> initialSkippedItems,
+  }) async {
+    return CsvBatchImportReport(
+      insertedCount: parsedProducts.length,
+      existingDbDuplicateCount: 0,
+      inCsvDuplicateCount: 0,
+      skippedMissingCount: initialSkippedItems.length,
+      insertedProducts: parsedProducts,
+      skippedItems: initialSkippedItems,
+    );
+  }
+
+  @override
   Future<void> deleteBatch(String pharmacyUid, String batchId) async {}
 
   @override

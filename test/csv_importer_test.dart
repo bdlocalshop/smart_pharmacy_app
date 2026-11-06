@@ -108,6 +108,30 @@ Cough Drops,Menthol,,,,Syrup,invalid_number''';
       expect(result.validProducts.isNotEmpty, isTrue);
       expect(result.skippedCount, equals(0));
     });
+
+    test('Identifies duplicates within CSV file when Brand Name and Unit Type are identical', () {
+      const csvData = '''Brand / Commercial Name,Generic Formula,Therapeutic Category,Manufacturer,Shelf Location,Dispensing Unit Type,Threshold
+Panadol 500mg,Paracetamol,Analgesic,GSK,Rack A-1,Tablet,50
+Napa 500mg,Paracetamol,Analgesic,Beximco,Rack A-2,Tablet,50
+Panadol 500mg,Paracetamol,Analgesic,GSK,Rack A-1,Tablet,50
+Panadol 500mg,Paracetamol,Analgesic,GSK,Rack A-1,Syrup,30''';
+
+      final result = CsvMedicineImporter.parseCsv(csvData);
+      // Row 1: Panadol Tablet (valid)
+      // Row 2: Napa Tablet (valid)
+      // Row 3: Panadol Tablet -> DUPLICATE of Row 1 (skipped)
+      // Row 4: Panadol Syrup -> DIFFERENT unit type (valid)
+      expect(result.validProducts.length, equals(3));
+      expect(result.skippedCount, equals(1));
+      expect(result.inCsvDuplicateCount, equals(1));
+      expect(result.skippedReasons.first, contains('Duplicate in CSV file'));
+
+      // Verify unable-to-upload CSV generation
+      final skippedCsv = CsvMedicineImporter.generateSkippedItemsCsv(result.skippedItems);
+      expect(skippedCsv, contains('Panadol 500mg'));
+      expect(skippedCsv, contains('Tablet'));
+      expect(skippedCsv, contains('Duplicate in CSV file'));
+    });
   });
 
   group('Database Batch Insertion Tests', () {
@@ -160,6 +184,58 @@ Omeprazole 20mg,Omeprazole,Gastrointestinal,HealthPharma,,Capsule,''';
       expect(omeprazole.product.minStockAlert, equals(50));
       expect(omeprazole.product.category, equals('Gastrointestinal'));
       expect(omeprazole.product.unitType, equals('Capsule'));
+    });
+
+    test('importMedicinesWithDuplicateCheck identifies database duplicates and produces report', () async {
+      // 1. Insert an existing product into DB
+      await repo.addProduct(
+        pharmacyUid: testUid,
+        brandName: 'Napa 500mg',
+        genericName: 'Paracetamol',
+        category: 'Analgesic',
+        manufacturer: 'Beximco',
+        shelfLocation: 'Rack A-1',
+        unitType: 'Tablet',
+        minStockAlert: 20,
+      );
+
+      // 2. Incoming CSV with:
+      // - Napa 500mg (Tablet) -> DUPLICATE of existing DB item (should be skipped)
+      // - Napa 500mg (Syrup)  -> DIFFERENT unit type (should be inserted)
+      // - Flagyl 400mg (Tablet) -> NEW (should be inserted)
+      // - Empty Name row -> SKIPPED (missing name)
+      const csvData = '''Brand / Commercial Name,Generic Formula,Therapeutic Category,Manufacturer,Shelf Location,Dispensing Unit Type,Threshold
+Napa 500mg,Paracetamol,Analgesic,Beximco,Rack A-1,Tablet,20
+Napa 500mg,Paracetamol,Analgesic,Beximco,Rack A-2,Syrup,30
+Flagyl 400mg,Metronidazole,Antibiotic,Square,Rack B-1,Tablet,50
+,Paracetamol,Analgesic,GSK,Rack C-1,Tablet,40''';
+
+      final parsed = CsvMedicineImporter.parseCsv(csvData);
+      expect(parsed.validProducts.length, equals(3));
+      expect(parsed.skippedCount, equals(1));
+
+      final report = await repo.importMedicinesWithDuplicateCheck(
+        pharmacyUid: testUid,
+        parsedProducts: parsed.validProducts,
+        initialSkippedItems: parsed.skippedItems,
+      );
+
+      // Verify report numbers
+      expect(report.insertedCount, equals(2)); // Napa Syrup + Flagyl Tablet
+      expect(report.existingDbDuplicateCount, equals(1)); // Napa Tablet
+      expect(report.skippedMissingCount, equals(1)); // Empty name row
+      expect(report.totalSkipped, equals(2));
+      expect(report.totalProcessed, equals(4));
+
+      // Verify catalog in database has exactly 3 items (1 original + 2 newly inserted)
+      final catalog = await repo.watchProducts(testUid).first;
+      expect(catalog.length, equals(3));
+
+      // Verify skipped CSV generation from report
+      final skippedCsv = CsvMedicineImporter.generateSkippedItemsCsv(report.skippedItems);
+      expect(skippedCsv, contains('Napa 500mg'));
+      expect(skippedCsv, contains('Already exists in database'));
+      expect(skippedCsv, contains('Brand / Commercial Name is missing'));
     });
   });
 

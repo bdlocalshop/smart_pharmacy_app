@@ -17,10 +17,20 @@ abstract class IInventoryRepository {
     int minStockAlert = 10,
   });
 
+  /// Fetches all active non-deleted products for duplicate checking.
+  Future<List<Product>> getActiveProducts(String pharmacyUid);
+
   /// Inserts multiple medicines in a single atomic database batch transaction.
   Future<int> addMultipleProducts({
     required String pharmacyUid,
     required List<ProductImportItem> products,
+  });
+
+  /// Performs full duplicate checking (Brand Name & Unit Type) against the database and inserts only new records.
+  Future<CsvBatchImportReport> importMedicinesWithDuplicateCheck({
+    required String pharmacyUid,
+    required List<ProductImportItem> parsedProducts,
+    required List<CsvSkippedItem> initialSkippedItems,
   });
 
   Future<void> updateProduct({

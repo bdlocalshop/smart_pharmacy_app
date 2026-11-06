@@ -3,13 +3,15 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
 import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_controller.dart';
 import '../controllers/inventory_controller.dart';
 import '../../domain/csv_medicine_importer.dart';
 
-/// Modal dialog for uploading and importing multiple medicines from a CSV file.
+/// Modal dialog for uploading and importing multiple medicines from a CSV file
+/// with automatic duplicate checking (Brand Name & Unit Type) and download of unable-to-upload items.
 class CsvImportDialog extends ConsumerStatefulWidget {
   const CsvImportDialog({super.key});
 
@@ -24,9 +26,18 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
   bool _isImporting = false;
   String? _errorMessage;
 
+  // Duplicate metrics evaluated against active database
+  int _existingDbDuplicateCount = 0;
+  int _newReadyCount = 0;
+  List<CsvSkippedItem> _previewSkippedItems = [];
+
+  // Completed upload report
+  CsvBatchImportReport? _uploadReport;
+
   Future<void> _pickCsvFile() async {
     setState(() {
       _errorMessage = null;
+      _uploadReport = null;
     });
 
     try {
@@ -53,9 +64,48 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
 
       final parsed = CsvMedicineImporter.parseCsv(csvContent);
 
+      // Check against active database records for existing duplicates
+      final session = ref.read(currentUserSessionProvider);
+      int dbDupes = 0;
+      final previewSkipped = List<CsvSkippedItem>.from(parsed.skippedItems);
+
+      if (session != null) {
+        final repo = ref.read(inventoryRepositoryProvider);
+        final existing = await repo.getActiveProducts(session.pharmacyUid);
+        final existingKeys = <String>{};
+        for (final ep in existing) {
+          existingKeys.add(ProductImportItem.buildDuplicateKey(ep.brandName, ep.unitType));
+        }
+
+        for (final p in parsed.validProducts) {
+          if (existingKeys.contains(p.duplicateKey)) {
+            dbDupes++;
+            previewSkipped.add(
+              CsvSkippedItem(
+                rowNumber: p.sourceRowNumber,
+                brandName: p.brandName,
+                genericName: p.genericName,
+                category: p.category,
+                manufacturer: p.manufacturer,
+                shelfLocation: p.shelfLocation,
+                unitType: p.unitType,
+                minStockAlert: p.minStockAlert.toString(),
+                reason: 'Already exists in database (Brand: "${p.brandName}", Unit: "${p.unitType}").',
+              ),
+            );
+          }
+        }
+      }
+
+      previewSkipped.sort((a, b) => a.rowNumber.compareTo(b.rowNumber));
+      final newCount = parsed.validProducts.length - dbDupes;
+
       setState(() {
         _selectedFileName = file.name;
         _importResult = parsed;
+        _existingDbDuplicateCount = dbDupes;
+        _newReadyCount = newCount;
+        _previewSkippedItems = previewSkipped;
         _isProcessing = false;
       });
     } catch (e) {
@@ -94,9 +144,40 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
     }
   }
 
+  Future<void> _downloadSkippedCsv(List<CsvSkippedItem> skippedItems) async {
+    if (skippedItems.isEmpty) return;
+
+    try {
+      final csvString = CsvMedicineImporter.generateSkippedItemsCsv(skippedItems);
+      final downloadsDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final targetFile = File('${downloadsDir.path}${Platform.pathSeparator}unable_to_upload_medicines_$timestamp.csv');
+      await targetFile.writeAsString(csvString);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Unable to upload list (${skippedItems.length} items) saved to: ${targetFile.path}'),
+            backgroundColor: AppColors.alertWarning,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not export skipped list: $e'),
+            backgroundColor: AppColors.alertCritical,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _executeImport() async {
     final result = _importResult;
-    if (result == null || result.validProducts.isEmpty) return;
+    if (result == null || _newReadyCount == 0) return;
 
     final session = ref.read(currentUserSessionProvider);
     if (session == null) return;
@@ -105,14 +186,16 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
 
     try {
       final repo = ref.read(inventoryRepositoryProvider);
-      final count = await repo.addMultipleProducts(
+      final report = await repo.importMedicinesWithDuplicateCheck(
         pharmacyUid: session.pharmacyUid,
-        products: result.validProducts,
+        parsedProducts: result.validProducts,
+        initialSkippedItems: result.skippedItems,
       );
 
-      if (mounted) {
-        Navigator.pop(context, count);
-      }
+      setState(() {
+        _isImporting = false;
+        _uploadReport = report;
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _isImporting = false);
@@ -128,6 +211,15 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // If upload has completed, render the final Audit & Report screen
+    if (_uploadReport != null) {
+      return _buildReportDialog(_uploadReport!);
+    }
+
+    return _buildUploadDialog();
+  }
+
+  Widget _buildUploadDialog() {
     final result = _importResult;
 
     return AlertDialog(
@@ -148,7 +240,7 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
               children: [
                 Text('Add Multiple Medicines (CSV Upload)', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Text(
-                  'Bulk upload medicines into your master catalog using a CSV file.',
+                  'Bulk upload medicines into your master catalog with automatic duplicate detection.',
                   style: TextStyle(fontSize: 12, color: AppColors.textSecondary, fontWeight: FontWeight.normal),
                 ),
               ],
@@ -166,13 +258,13 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
         ],
       ),
       content: SizedBox(
-        width: 750,
+        width: 780,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Pharmacy Rules Banner
+              // Pharmacy Rules & Duplicate Matching Banner
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -187,13 +279,16 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                       children: [
                         Icon(Icons.rule, color: Colors.blue, size: 18),
                         SizedBox(width: 8),
-                        Text('Automatic CSV Processing Rules:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13)),
+                        Expanded(
+                          child: Text('Automatic CSV Processing & Duplicate Checking Rules:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 13)),
+                        ),
                       ],
                     ),
                     SizedBox(height: 6),
+                    Text('• Duplicate Detection: Items with matching "Brand Name" AND "Dispensing Unit Type" are automatically identified and skipped.', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
                     Text('• Missing Brand/Commercial Name: Row is skipped (NOT uploaded).', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Missing Shelf Location: Automatically assigned to "Rack 0-0".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
-                    Text('• Missing / Invalid Reorder Alert Threshold: Defaults to 50 units.', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
+                    Text('• Missing or Invalid Reorder Alert Threshold: Defaults to 50 units.', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Other Missing Information (Generic, Category, Manufacturer): Marked as "Not Available".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                     Text('• Missing Dispensing Unit Type: Defaults to "Tablet".', style: TextStyle(fontSize: 12, color: AppColors.textPrimary)),
                   ],
@@ -270,7 +365,7 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                     children: [
                       CircularProgressIndicator(),
                       SizedBox(height: 8),
-                      Text('Reading and parsing CSV data...'),
+                      Text('Reading CSV and checking duplicates in database...'),
                     ],
                   ),
                 ),
@@ -281,7 +376,7 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    // Valid count badge
+                    // Ready to Import badge
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -297,7 +392,7 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('${result.importedCount} Ready to Import', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.alertSafe)),
+                                Text('$_newReadyCount Ready to Import', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.alertSafe)),
                                 Text('Total rows found: ${result.totalRowsParsed}', style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                               ],
                             ),
@@ -305,9 +400,35 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
 
-                    // Skipped count badge
+                    // Database Duplicates badge
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _existingDbDuplicateCount > 0 ? Colors.amber.shade50 : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: _existingDbDuplicateCount > 0 ? Colors.amber.shade300 : Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.copy_rounded, color: _existingDbDuplicateCount > 0 ? Colors.amber.shade800 : Colors.grey, size: 24),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('$_existingDbDuplicateCount In Database', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: _existingDbDuplicateCount > 0 ? Colors.amber.shade900 : Colors.grey.shade700)),
+                                const Text('Already exists (skip)', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+
+                    // Skipped from file badge
                     Expanded(
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -323,11 +444,8 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  '${result.skippedCount} Rows Skipped',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: result.hasSkipped ? Colors.orange.shade900 : Colors.grey.shade700),
-                                ),
-                                const Text('Name missing / invalid', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                Text('${result.skippedCount} Skipped in File', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: result.hasSkipped ? Colors.orange.shade900 : Colors.grey.shade700)),
+                                const Text('Dupe in file / no name', style: TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                               ],
                             ),
                           ],
@@ -337,27 +455,54 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
                   ],
                 ),
 
-                if (result.hasSkipped) ...[
-                  const SizedBox(height: 8),
+                if (_previewSkippedItems.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total ${_previewSkippedItems.length} items will not be uploaded (duplicates or missing name).',
+                        style: TextStyle(fontSize: 12, color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: Colors.orange.shade900,
+                          side: BorderSide(color: Colors.orange.shade400),
+                        ),
+                        icon: const Icon(Icons.download, size: 14),
+                        label: const Text('Download Skipped List (.csv)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        onPressed: () => _downloadSkippedCsv(_previewSkippedItems),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   ExpansionTile(
                     tilePadding: EdgeInsets.zero,
                     dense: true,
                     title: Text(
-                      'View Skipped Rows Details (${result.skippedCount})',
-                      style: const TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.bold),
+                      'View Skipped & Duplicate Reasons (${_previewSkippedItems.length} items)',
+                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800, fontWeight: FontWeight.bold),
                     ),
                     children: [
                       Container(
-                        constraints: const BoxConstraints(maxHeight: 100),
+                        constraints: const BoxConstraints(maxHeight: 120),
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: Colors.orange.shade50,
                           borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.orange.shade200),
                         ),
                         child: ListView.builder(
                           shrinkWrap: true,
-                          itemCount: result.skippedReasons.length,
-                          itemBuilder: (ctx, i) => Text('• ${result.skippedReasons[i]}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                          itemCount: _previewSkippedItems.length,
+                          itemBuilder: (ctx, i) {
+                            final item = _previewSkippedItems[i];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2.0),
+                              child: Text('• Row ${item.rowNumber} [${item.brandName} - ${item.unitType}]: ${item.reason}', style: const TextStyle(fontSize: 11, color: Colors.black87)),
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -434,13 +579,263 @@ class _CsvImportDialogState extends ConsumerState<CsvImportDialog> {
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
               : const Icon(Icons.file_upload, size: 18),
           label: Text(
-            result != null && result.validProducts.isNotEmpty
-                ? 'Confirm & Upload (${result.validProducts.length} Items)'
+            _newReadyCount > 0
+                ? 'Confirm & Upload ($_newReadyCount New Medicines)'
                 : 'Upload Medicines',
           ),
-          onPressed: (_isImporting || result == null || result.validProducts.isEmpty)
+          onPressed: (_isImporting || result == null || _newReadyCount == 0)
               ? null
               : _executeImport,
+        ),
+      ],
+    );
+  }
+
+  /// Post-upload comprehensive report dialog
+  Widget _buildReportDialog(CsvBatchImportReport report) {
+    return AlertDialog(
+      title: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppColors.alertSafe.withAlpha(25),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.check_circle_outline, color: AppColors.alertSafe, size: 26),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Database Upload Summary Report', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(
+                  'Bulk medicine upload completed. Detailed audit breakdown below:',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: 720,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Stat KPI Cards
+              Row(
+                children: [
+                  // Newly Inserted
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.green.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('${report.insertedCount}', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green.shade900)),
+                              Icon(Icons.add_task_rounded, color: Colors.green.shade700, size: 24),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text('Newly Entered', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                          const Text('Added to catalog database', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Already in Database
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.amber.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('${report.existingDbDuplicateCount}', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                              Icon(Icons.copy_rounded, color: Colors.amber.shade700, size: 24),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text('Already Existed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                          const Text('Matched Brand & Unit Type', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // File Skipped / Invalid
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('${report.inCsvDuplicateCount + report.skippedMissingCount}', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.orange.shade900)),
+                              Icon(Icons.block_rounded, color: Colors.orange.shade700, size: 24),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text('Skipped from File', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
+                          const Text('File duplicate / no name', style: TextStyle(fontSize: 11, color: Colors.black54)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Skipped export action area
+              if (report.totalSkipped > 0) ...[
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${report.totalSkipped} items were not uploaded to the database.',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                const SizedBox(height: 2),
+                                const Text(
+                                  'You can export all skipped rows as a CSV file to review reasons, fix missing values, or modify duplicate entries.',
+                                  style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            ),
+                            icon: const Icon(Icons.download, size: 16),
+                            label: const Text('Download Unable to Upload List (.csv)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            onPressed: () => _downloadSkippedCsv(report.skippedItems),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(
+                          'View Detailed Skipped Breakdown (${report.skippedItems.length} rows)',
+                          style: TextStyle(fontSize: 12, color: Colors.blue.shade900, fontWeight: FontWeight.bold),
+                        ),
+                        children: [
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 150),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: report.skippedItems.length,
+                              itemBuilder: (ctx, i) {
+                                final item = report.skippedItems[i];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 3.0),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text('Row ${item.rowNumber}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          '${item.brandName} (${item.unitType}): ${item.reason}',
+                                          style: const TextStyle(fontSize: 11, color: Colors.black87),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      actions: [
+        if (report.totalSkipped > 0)
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            icon: const Icon(Icons.file_download_outlined, size: 16),
+            label: const Text('Export Unable to Upload (.csv)'),
+            onPressed: () => _downloadSkippedCsv(report.skippedItems),
+          ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+          onPressed: () => Navigator.pop(context, report.insertedCount),
+          child: const Text('Finish & Close', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
     );
