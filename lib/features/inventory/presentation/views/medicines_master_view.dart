@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
-import 'package:smart_pharmacy_app/core/database/app_database.dart';
+import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
 import 'package:smart_pharmacy_app/core/localization/language_controller.dart';
 import 'package:smart_pharmacy_app/features/auth/domain/user_role.dart';
 import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_controller.dart';
@@ -22,6 +22,7 @@ class MedicinesMasterView extends ConsumerStatefulWidget {
 class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
   final _searchController = TextEditingController();
   String _selectedCategory = 'All';
+  bool _isRefreshing = false;
 
   @override
   void dispose() {
@@ -82,6 +83,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                       child: TextField(
                         controller: _searchController,
                         onChanged: (val) {
+                          setState(() {});
                           ref.read(medicineSearchQueryProvider.notifier).state = val;
                         },
                         decoration: InputDecoration(
@@ -95,6 +97,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                                   icon: const Icon(Icons.clear, size: 18),
                                   onPressed: () {
                                     _searchController.clear();
+                                    setState(() {});
                                     ref.read(medicineSearchQueryProvider.notifier).state = '';
                                   },
                                 ),
@@ -102,6 +105,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                                 controller: _searchController,
                                 tooltip: 'Voice Search Catalog',
                                 onChanged: (val) {
+                                  setState(() {});
                                   ref.read(medicineSearchQueryProvider.notifier).state = val;
                                 },
                               ),
@@ -136,7 +140,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                 ),
                 const SizedBox(height: 12),
 
-                // Category Filter Chips
+                // Category Filter Chips & Manual Refresh Button
                 Row(
                   children: [
                     Text(strings.categoryLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.textSecondary)),
@@ -156,6 +160,44 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Refresh Button (aligned below Add Medicine)
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        side: const BorderSide(color: AppColors.primary, width: 1.2),
+                        foregroundColor: AppColors.primary,
+                      ),
+                      icon: _isRefreshing
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                            )
+                          : const Icon(Icons.refresh, size: 16),
+                      label: Text(
+                        _isRefreshing ? (strings.isBn ? 'রিফ্রেশ হচ্ছে...' : 'Refreshing...') : strings.refresh,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                      onPressed: _isRefreshing
+                          ? null
+                          : () async {
+                              final messenger = ScaffoldMessenger.of(context);
+                              setState(() => _isRefreshing = true);
+                              ref.invalidate(productsWithStockProvider);
+                              await Future.delayed(const Duration(milliseconds: 350));
+                              if (!mounted) return;
+                              setState(() => _isRefreshing = false);
+                              messenger.showSnackBar(
+                                SnackBar(
+                                  content: Text(strings.isBn ? 'মেডিসিন ক্যাটালগ রিফ্রেশ হয়েছে' : 'Medicine catalog refreshed'),
+                                  duration: const Duration(seconds: 1),
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
                     ),
                   ],
                 ),
@@ -428,7 +470,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                                         IconButton(
                                           icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.alertCritical),
                                           tooltip: 'Delete Medicine',
-                                          onPressed: () => _confirmDelete(p),
+                                          onPressed: () => _confirmDelete(item),
                                         ),
                                       ],
                                     ],
@@ -477,12 +519,88 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
     );
   }
 
-  void _confirmDelete(Product product) {
+  void _confirmDelete(ProductWithAggregateStock item) {
+    final totalUnsold = item.activeStock + item.expiredStock;
+
+    // Strict safety check: Block deletion if unsold stock exists
+    if (totalUnsold > 0) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.block, color: AppColors.alertCritical, size: 36),
+          title: const Text('Cannot Delete Medicine'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cannot delete "${item.product.brandName}" because it still has unsold stock in inventory.',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.alertCritical.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.alertCritical.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• Active Stock: ${item.activeStock} units', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    if (item.expiredStock > 0)
+                      Text('• Expired Stock: ${item.expiredStock} units', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.alertCritical)),
+                    const Divider(height: 16),
+                    Text('Total Unsold Stock: $totalUnsold units', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.alertCritical)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'To delete this medicine, you must first:',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              ),
+              const SizedBox(height: 6),
+              const Text('1. Sell all remaining units via POS checkout, or'),
+              const Text('2. Delete/remove the unsold or expired batches in the Batches Ledger.'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.inventory_2_outlined, size: 16),
+              label: const Text('Manage Batches'),
+              onPressed: () {
+                Navigator.pop(ctx);
+                showDialog(
+                  context: context,
+                  builder: (_) => BatchManagementDialog(product: item.product),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Unsold stock == 0: Allow soft-deletion with clear audit assurance
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Medicine?'),
-        content: Text('Are you sure you want to soft-delete "${product.brandName}"? Existing sales transaction history will remain intact for reporting.'),
+        content: Text(
+          'Are you sure you want to delete "${item.product.brandName}"? All stock is sold out (0 units remaining).\n\nExisting sales transaction history and invoices will remain completely intact for reporting.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
@@ -491,8 +609,19 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
               final session = ref.read(currentUserSessionProvider);
               if (session != null) {
                 final repo = ref.read(inventoryRepositoryProvider);
-                await repo.deleteProduct(session.pharmacyUid, product.id);
-                if (ctx.mounted) Navigator.pop(ctx);
+                try {
+                  await repo.deleteProduct(session.pharmacyUid, item.product.id);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                  }
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Cannot delete: $e'), backgroundColor: AppColors.alertCritical),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Delete'),

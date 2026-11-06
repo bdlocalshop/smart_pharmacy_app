@@ -1,6 +1,7 @@
 import 'package:smart_pharmacy_app/core/database/app_database.dart';
 import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
 import 'package:smart_pharmacy_app/core/database/daos/sales_dao.dart';
+import 'package:smart_pharmacy_app/features/reports/domain/report_models.dart';
 
 /// Contract for POS search, stock queries, and atomic checkout operations.
 abstract class IPosRepository {
@@ -33,5 +34,8 @@ abstract class IPosRepository {
 
   /// Fetches an invoice and its line items.
   Future<Sale?> getSaleByInvoice(String pharmacyUid, String invoiceNumber);
+
+  /// Fetches a detailed sale report with items and cashier information by sale ID.
+  Future<DetailedSaleReport?> getDetailedSaleById(String pharmacyUid, String saleId);
 }
 

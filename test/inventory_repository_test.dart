@@ -109,6 +109,51 @@ void main() {
       expect(afterDelete.isEmpty, isTrue);
     });
 
+    test('Strictly blocks deleting a medicine with unsold stock and allows delete after batches are removed', () async {
+      await repo.addProduct(
+        pharmacyUid: pharmacyUid,
+        brandName: 'Stocked Medicine 500mg',
+        genericName: 'Molecule Test',
+        category: 'Analgesic',
+        manufacturer: 'Pharma Test',
+        shelfLocation: 'Rack A-1',
+        unitType: 'Tablet',
+        minStockAlert: 10,
+      );
+
+      final products = await repo.watchProducts(pharmacyUid).first;
+      final product = products.first.product;
+
+      // Add a batch with 50 units
+      await repo.addBatch(
+        pharmacyUid: pharmacyUid,
+        productId: product.id,
+        batchNumber: 'BA-20261106-01',
+        supplierName: 'Pharma Test',
+        purchasePrice: 10.0,
+        sellingPrice: 15.0,
+        initialQuantity: 50,
+        expiryDate: DateTime.now().add(const Duration(days: 180)),
+      );
+
+      // Attempting to delete product while stock remains must throw UnsoldStockException
+      expect(
+        () => repo.deleteProduct(pharmacyUid, product.id),
+        throwsA(isA<UnsoldStockException>()),
+      );
+
+      // Now soft-delete the unsold batch
+      final batches = await repo.watchBatchesForProduct(pharmacyUid, product.id).first;
+      expect(batches.length, equals(1));
+      await repo.deleteBatch(pharmacyUid, batches.first.id);
+
+      // After batches are deleted, deleteProduct succeeds
+      await repo.deleteProduct(pharmacyUid, product.id);
+
+      final afterDelete = await repo.watchProducts(pharmacyUid).first;
+      expect(afterDelete.isEmpty, isTrue);
+    });
+
     test('Filters medicine catalog by search query (brand, generic, shelf location)', () async {
       await repo.addProduct(
         pharmacyUid: pharmacyUid,

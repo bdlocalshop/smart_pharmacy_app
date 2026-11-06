@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 /// Supported thermal paper widths.
 enum ThermalReceiptFormat {
@@ -345,5 +347,48 @@ class ThermalReceiptGenerator {
     final file = File(filePath);
     await file.writeAsString(receiptContent, flush: true);
     return file;
+  }
+
+  /// Generates a PDF receipt buffer optimized for 80mm or 58mm roll printing.
+  static Future<Uint8List> generatePdfReceipt(
+    ReceiptInvoiceData data, {
+    ThermalReceiptFormat format = ThermalReceiptFormat.mm80,
+  }) async {
+    final doc = pw.Document();
+    final textContent = generateTextReceipt(data, format: format);
+    final pageFormat = format == ThermalReceiptFormat.mm80
+        ? PdfPageFormat.roll80.copyWith(
+            marginTop: 4 * PdfPageFormat.mm,
+            marginBottom: 6 * PdfPageFormat.mm,
+            marginLeft: 3 * PdfPageFormat.mm,
+            marginRight: 3 * PdfPageFormat.mm,
+          )
+        : PdfPageFormat.roll57.copyWith(
+            marginTop: 3 * PdfPageFormat.mm,
+            marginBottom: 5 * PdfPageFormat.mm,
+            marginLeft: 2 * PdfPageFormat.mm,
+            marginRight: 2 * PdfPageFormat.mm,
+          );
+
+    doc.addPage(
+      pw.Page(
+        pageFormat: pageFormat,
+        build: (pw.Context context) {
+          return pw.Padding(
+            padding: const pw.EdgeInsets.symmetric(vertical: 4),
+            child: pw.Text(
+              textContent,
+              style: pw.TextStyle(
+                font: pw.Font.courier(),
+                fontSize: format == ThermalReceiptFormat.mm80 ? 8.5 : 7.0,
+                lineSpacing: 1.25,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    return doc.save();
   }
 }

@@ -10,6 +10,31 @@ import 'package:smart_pharmacy_app/features/pos/presentation/controllers/pos_con
 import 'package:smart_pharmacy_app/main.dart';
 
 void main() {
+  testWidgets('SmartPharmacyApp renders InitialSetupScreen when setupRequired', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authControllerProvider.overrideWith(
+            () => _MockAuthController(
+              const AuthState(status: AuthStatus.setupRequired),
+            ),
+          ),
+        ],
+        child: const SmartPharmacyApp(),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Initial Pharmacy Onboarding'), findsOneWidget);
+    expect(find.text('Sign In & Bind'), findsOneWidget);
+  });
   testWidgets('SmartPharmacyApp renders LoginScreen when unauthenticated', (WidgetTester tester) async {
     tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1.0;

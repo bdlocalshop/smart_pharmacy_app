@@ -215,6 +215,16 @@ class AuthController extends Notifier<AuthState> {
   void clearError() {
     state = state.copyWith(clearError: true);
   }
+
+  /// Navigates to the sign-in / license activation screen.
+  void goToSignIn() {
+    state = state.copyWith(status: AuthStatus.unauthenticated, clearError: true);
+  }
+
+  /// Navigates to the initial setup / onboarding screen.
+  void goToSetup() {
+    state = state.copyWith(status: AuthStatus.setupRequired, clearError: true);
+  }
 }
 
 final authControllerProvider =

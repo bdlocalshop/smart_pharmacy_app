@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:smart_pharmacy_app/core/database/app_database.dart';
 import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
 import 'package:smart_pharmacy_app/features/alerts/presentation/views/expiry_radar_view.dart';
@@ -15,6 +16,7 @@ import 'package:smart_pharmacy_app/features/inventory/presentation/views/medicin
 
 class _FakeInventoryRepository implements IInventoryRepository {
   final List<Map<String, dynamic>> addedBatches = [];
+  final List<Map<String, dynamic>> updatedBatches = [];
 
   @override
   Future<void> addBatch({
@@ -74,7 +76,17 @@ class _FakeInventoryRepository implements IInventoryRepository {
     required double sellingPrice,
     required int currentStock,
     required DateTime expiryDate,
-  }) async {}
+  }) async {
+    updatedBatches.add({
+      'batchId': batchId,
+      'batchNumber': batchNumber,
+      'supplierName': supplierName,
+      'purchasePrice': purchasePrice,
+      'sellingPrice': sellingPrice,
+      'currentStock': currentStock,
+      'expiryDate': expiryDate,
+    });
+  }
 
   @override
   Future<void> updateProduct({
@@ -211,6 +223,15 @@ void main() {
       // Verify Header & Search
       expect(find.byType(TextField), findsOneWidget);
       expect(find.text('Add Medicine (F3)'), findsOneWidget);
+      expect(find.text('Refresh'), findsOneWidget);
+
+      // Tap Refresh button
+      await tester.tap(find.text('Refresh'));
+      await tester.pump();
+      expect(find.text('Refreshing...'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+      expect(find.text('Refresh'), findsOneWidget);
 
       // Verify Category Chips
       expect(find.text('All'), findsOneWidget);
@@ -263,6 +284,53 @@ void main() {
       expect(find.textContaining('Salesman View-Only Mode'), findsOneWidget);
       // Salesman should NOT see Delete icon
       expect(find.byIcon(Icons.delete_outline), findsNothing);
+    });
+
+    testWidgets('Tapping delete icon on medicine with unsold stock blocks deletion and offers Manage Batches', (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final sampleProd = _createSampleProduct();
+      final sampleItem = ProductWithAggregateStock(
+        product: sampleProd,
+        activeStock: 80,
+        expiredStock: 20,
+        batchCount: 2,
+        earliestExpiry: DateTime(2027, 6, 15),
+        isLowStock: false,
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            currentUserSessionProvider.overrideWithValue(_createTestSession(role: UserRole.owner)),
+            currentUserRoleProvider.overrideWithValue(UserRole.owner),
+            productsWithStockProvider.overrideWith((ref) => Stream.value([sampleItem])),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: MedicinesMasterView(),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      // Find and tap delete button
+      final deleteBtn = find.byIcon(Icons.delete_outline);
+      expect(deleteBtn, findsOneWidget);
+      await tester.tap(deleteBtn);
+      await tester.pumpAndSettle();
+
+      // Should show Cannot Delete dialog
+      expect(find.text('Cannot Delete Medicine'), findsOneWidget);
+      expect(find.textContaining('Active Stock: 80 units'), findsOneWidget);
+      expect(find.textContaining('Expired Stock: 20 units'), findsOneWidget);
+      expect(find.textContaining('Total Unsold Stock: 100 units'), findsOneWidget);
+      expect(find.text('Manage Batches'), findsOneWidget);
     });
   });
 
@@ -362,49 +430,55 @@ void main() {
       await tester.tap(find.byType(PopupMenuButton<String>));
       await tester.pumpAndSettle();
 
-      // Verify 3 options exist
+      // Verify 3 options exist (Adjust Stock Count is now Edit Batch)
       expect(find.text('Add Same Batch'), findsOneWidget);
-      expect(find.text('Adjust Stock Count'), findsOneWidget);
+      expect(find.text('Edit Batch'), findsOneWidget);
       expect(find.text('Delete Batch'), findsOneWidget);
 
       // Tap 'Add Same Batch'
       await tester.tap(find.text('Add Same Batch'));
       await tester.pumpAndSettle();
 
-      // Verify form is populated
-      expect(find.widgetWithText(TextFormField, 'BATCH-2026-X'), findsOneWidget);
+      // Verify form is populated with auto-generated batch number (BA-YYYYMMDD-...) and source batch data
+      final todayStr = DateFormat('yyyyMMdd').format(DateTime.now());
+      expect(find.textContaining('BA-$todayStr-'), findsWidgets);
       expect(find.widgetWithText(TextFormField, '15.50'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, '22.00'), findsOneWidget);
       expect(find.widgetWithText(TextFormField, '80'), findsOneWidget);
-      expect(find.textContaining('Pre-filled with data from Batch #BATCH-2026-X'), findsOneWidget);
 
-      // Click "Add Batch" without changing the batch number
+      // Click "Add Batch" to save the cloned batch
       await tester.tap(find.widgetWithText(ElevatedButton, 'Add Batch'));
       await tester.pumpAndSettle();
 
-      // Verify popup appears and batch is NOT added
-      expect(find.text('Please Change Batch Number'), findsOneWidget);
-      expect(find.textContaining('You are adding a new batch using data from Batch'), findsOneWidget);
-      expect(fakeRepo.addedBatches.length, equals(0));
-
-      // Dismiss popup
-      await tester.tap(find.widgetWithText(ElevatedButton, 'OK'));
-      await tester.pumpAndSettle();
-
-      // Now change the Batch Number to BATCH-2026-NEW
-      final batchField = find.widgetWithText(TextFormField, 'BATCH-2026-X');
-      await tester.enterText(batchField, 'BATCH-2026-NEW');
-      await tester.pump();
-
-      // Click "Add Batch" again
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Add Batch'));
-      await tester.pumpAndSettle();
-
-      // Verify batch was added successfully
+      // Verify batch was added with auto-generated batch number
       expect(fakeRepo.addedBatches.length, equals(1));
-      expect(fakeRepo.addedBatches.first['batchNumber'], equals('BATCH-2026-NEW'));
+      expect(fakeRepo.addedBatches.first['batchNumber'], startsWith('BA-$todayStr-'));
       expect(fakeRepo.addedBatches.first['purchasePrice'], equals(15.50));
       expect(fakeRepo.addedBatches.first['sellingPrice'], equals(22.00));
+
+      // Now test 'Edit Batch' flow
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Edit Batch'));
+      await tester.pumpAndSettle();
+
+      // Button should now be 'Edit Batch'
+      expect(find.widgetWithText(ElevatedButton, 'Edit Batch'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'BATCH-2026-X'), findsOneWidget);
+
+      // Change selling price to 25.00 and save
+      final priceField = find.widgetWithText(TextFormField, '22.00');
+      await tester.enterText(priceField, '25.00');
+      await tester.pump();
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Edit Batch'));
+      await tester.pumpAndSettle();
+
+      // Verify update was dispatched to repository
+      expect(fakeRepo.updatedBatches.length, equals(1));
+      expect(fakeRepo.updatedBatches.first['batchNumber'], equals('BATCH-2026-X'));
+      expect(fakeRepo.updatedBatches.first['sellingPrice'], equals(25.00));
     });
   });
 

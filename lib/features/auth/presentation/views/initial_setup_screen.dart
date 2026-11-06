@@ -16,7 +16,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _pharmacyNameController = TextEditingController(text: 'Smart Pharmacy & Healthcare');
-  final _licenseController = TextEditingController(text: 'LIC-PHARM-2026-904');
+  final _licenseController = TextEditingController();
   final _phoneController = TextEditingController(text: '+880 1717-449639');
   final _addressController = TextEditingController(text: '742 Evergreen Terrace, Medical District, Suite 100');
   final _mapPinController = TextEditingController();
@@ -51,43 +51,37 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
     super.dispose();
   }
 
-  Future<void> _submitSetup() async {
+  Future<void> _submitSetup({bool forceOffline = false}) async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isProcessing = true);
 
-    final notifier = ref.read(authControllerProvider.notifier);
-    final localSuccess = await notifier.setupInitialPharmacy(
-      pharmacyName: _pharmacyNameController.text,
-      contactPhone: _phoneController.text,
-      licenseNumber: _licenseController.text.isEmpty ? null : _licenseController.text,
-      address: _addressController.text.trim(),
-      mapPinUrl: _mapPinController.text.trim().isEmpty ? null : _mapPinController.text.trim(),
-      currencySymbol: _currencyController.text.isEmpty ? '৳' : _currencyController.text,
-      ownerFullName: _ownerFullNameController.text,
-      ownerPhone: _ownerPhoneController.text.trim().isEmpty ? null : _ownerPhoneController.text.trim(),
-      ownerUsername: _ownerUsernameController.text,
-      ownerPassword: _ownerPasswordController.text,
-    );
-
-    if (!localSuccess) {
-      if (mounted) setState(() => _isProcessing = false);
-      return;
+    String? cleanMapUrl = _mapPinController.text.trim();
+    if (cleanMapUrl.isNotEmpty) {
+      if (!cleanMapUrl.startsWith('http://') && !cleanMapUrl.startsWith('https://')) {
+        if (cleanMapUrl.startsWith('s://')) {
+          cleanMapUrl = 'http$cleanMapUrl';
+        } else {
+          cleanMapUrl = 'https://$cleanMapUrl';
+        }
+      }
+    } else {
+      cleanMapUrl = null;
     }
 
-    // Optional Cloud API Hardware Registration
-    if (_registerWithCloud) {
+    // 1. If cloud registration is checked, register in the cloud backend FIRST
+    if (_registerWithCloud && !forceOffline) {
       final cloudService = ref.read(cloudLicenseServiceProvider);
       final tradeLicense = _licenseController.text.trim().isNotEmpty
           ? _licenseController.text.trim()
-          : 'TL-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch % 10000}';
+          : 'TL-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch % 100000}';
 
       final regResult = await cloudService.registerPharmacy(
         pharmacyName: _pharmacyNameController.text,
         tradeLicenseNumber: tradeLicense,
         pharmacyAddress: _addressController.text.trim(),
         pharmacyPhone: _phoneController.text.trim(),
-        mapLocationUrl: _mapPinController.text.trim().isEmpty ? null : _mapPinController.text.trim(),
+        mapLocationUrl: cleanMapUrl,
         ownerName: _ownerFullNameController.text.trim(),
         ownerPhone: _ownerPhoneController.text.trim(),
         ownerEmail: _ownerEmailController.text.trim().isEmpty ? null : _ownerEmailController.text.trim(),
@@ -95,27 +89,80 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
         passwordConfirmation: _confirmPasswordController.text,
       );
 
-      if (regResult.success && regResult.licenseKey != null) {
+      if (!regResult.success) {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.cloud_off, color: AppColors.alertCritical),
+                  SizedBox(width: 10),
+                  Text('Cloud Registration Notice'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    regResult.message ?? 'Unable to connect to the cloud API server.',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ensure your web server (pharmacy-sas) is running, or proceed with offline-only setup for now.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _submitSetup(forceOffline: true);
+                  },
+                  child: const Text('Proceed Offline Only'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _submitSetup();
+                  },
+                  child: const Text('Retry Connection'),
+                ),
+              ],
+            ),
+          );
+        }
+        return;
+      }
+
+      if (regResult.licenseKey != null) {
         await cloudService.validateLicense();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppColors.accent,
-              content: Text('Cloud License Bound: ${regResult.licenseKey}'),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: AppColors.warning,
-              content: Text('Local store active. Cloud Notice: ${regResult.message}'),
-            ),
-          );
-        }
       }
     }
+
+    // 2. Complete local store database initialization
+    final notifier = ref.read(authControllerProvider.notifier);
+    await notifier.setupInitialPharmacy(
+      pharmacyName: _pharmacyNameController.text,
+      contactPhone: _phoneController.text,
+      licenseNumber: _licenseController.text.isEmpty ? null : _licenseController.text,
+      address: _addressController.text.trim(),
+      mapPinUrl: cleanMapUrl,
+      currencySymbol: _currencyController.text.isEmpty ? '৳' : _currencyController.text,
+      ownerFullName: _ownerFullNameController.text,
+      ownerPhone: _ownerPhoneController.text.trim().isEmpty ? null : _ownerPhoneController.text.trim(),
+      ownerUsername: _ownerUsernameController.text,
+      ownerPassword: _ownerPasswordController.text,
+    );
 
     if (mounted) setState(() => _isProcessing = false);
   }
@@ -157,23 +204,25 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                             ),
                           ),
                           const SizedBox(width: 16),
-                          const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Initial Pharmacy Onboarding',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Initial Pharmacy Onboarding',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Configure your local store installation and master Owner credentials.',
-                                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                              ),
-                            ],
+                                SizedBox(height: 4),
+                                Text(
+                                  'Configure your local store installation and master Owner credentials.',
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -241,6 +290,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                 _buildTextField(
                                   controller: _licenseController,
                                   label: 'License / Registration Number',
+                                  hintText: 'e.g. TL-2026-001 (or auto-generated)',
                                   icon: Icons.badge_outlined,
                                 ),
                                 const SizedBox(height: 14),
@@ -269,7 +319,16 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                 _buildTextField(
                                   controller: _mapPinController,
                                   label: 'Map Pin Link (Google Maps)',
+                                  hintText: 'https://maps.google.com/... (optional)',
                                   icon: Icons.pin_drop_outlined,
+                                  validator: (v) {
+                                    if (v == null || v.trim().isEmpty) return null;
+                                    final val = v.trim();
+                                    if (!val.startsWith('http://') && !val.startsWith('https://')) {
+                                      return 'Must start with https:// or http://';
+                                    }
+                                    return null;
+                                  },
                                 ),
                               ],
                             ),
@@ -430,8 +489,28 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
 
                       // Submit Button Bar
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.primary,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            ),
+                            icon: const Icon(Icons.login, size: 18),
+                            label: const Text(
+                              'Sign In & Bind',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                            onPressed: (_isProcessing || authState.isSubmitting)
+                                ? null
+                                : () {
+                                    ref.read(authControllerProvider.notifier).goToSignIn();
+                                  },
+                          ),
                           ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
@@ -471,6 +550,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
+    String? hintText,
     bool obscureText = false,
     Widget? suffixIcon,
     int maxLines = 1,
@@ -485,6 +565,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
       onFieldSubmitted: onFieldSubmitted,
       decoration: InputDecoration(
         labelText: label,
+        hintText: hintText,
         prefixIcon: Icon(icon, size: 18, color: AppColors.textSecondary),
         suffixIcon: suffixIcon,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),

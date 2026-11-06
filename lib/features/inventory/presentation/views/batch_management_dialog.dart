@@ -21,7 +21,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
   final _formKey = GlobalKey<FormState>();
 
   final _batchNumberCtl = TextEditingController();
-  final _supplierNameCtl = TextEditingController(text: 'MediGlobal Supplies');
+  final _supplierNameCtl = TextEditingController();
   final _purchasePriceCtl = TextEditingController();
   final _sellingPriceCtl = TextEditingController();
   final _quantityCtl = TextEditingController();
@@ -29,14 +29,30 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
 
   bool _isSaving = false;
   String? _clonedFromBatchNumber;
+  ProductBatch? _editingBatch;
+  TextEditingController? _autocompleteSupplierCtl;
 
-  final List<String> _distributorSuggestions = const [
-    'MediGlobal Supplies',
-    'Apex Pharma Logistics',
-    'City Wholesale Distributors',
-    'PharmaCare Direct',
-    'National Medical Stores',
-  ];
+  List<String> get _distributorSuggestions {
+    final mfg = widget.product.manufacturer.trim();
+    final suggestions = <String>[];
+    if (mfg.isNotEmpty) suggestions.add(mfg);
+    suggestions.addAll(const [
+      'MediGlobal Supplies',
+      'Apex Pharma Logistics',
+      'City Wholesale Distributors',
+      'PharmaCare Direct',
+      'National Medical Stores',
+    ]);
+    return suggestions;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final mfg = widget.product.manufacturer.trim();
+    _supplierNameCtl.text = mfg.isNotEmpty ? mfg : 'Not Available';
+    _batchNumberCtl.text = _generateBatchNumber();
+  }
 
   @override
   void dispose() {
@@ -48,113 +64,226 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
     super.dispose();
   }
 
-  void _populateSameBatch(ProductBatch batch) {
+  String _generateBatchNumber({List<ProductBatch>? existingBatches}) {
+    final now = DateTime.now();
+    final dateStr = DateFormat('yyyyMMdd').format(now);
+    final prefix = 'BA-$dateStr-';
+
+    int maxSeq = 0;
+    if (existingBatches != null) {
+      for (final b in existingBatches) {
+        final num = b.batchNumber.trim();
+        if (num.startsWith(prefix)) {
+          final remainder = num.substring(prefix.length);
+          final parsed = int.tryParse(remainder);
+          if (parsed != null && parsed > maxSeq) {
+            maxSeq = parsed;
+          }
+        }
+      }
+    }
+    final nextSeq = (maxSeq + 1).toString().padLeft(2, '0');
+    return '$prefix$nextSeq';
+  }
+
+  void _cancelEdit({List<ProductBatch>? existingBatches}) {
     setState(() {
+      _editingBatch = null;
+      _clonedFromBatchNumber = null;
+      _batchNumberCtl.text = _generateBatchNumber(existingBatches: existingBatches);
+      final mfg = widget.product.manufacturer.trim();
+      _supplierNameCtl.text = mfg.isNotEmpty ? mfg : 'Not Available';
+      _autocompleteSupplierCtl?.text = _supplierNameCtl.text;
+      _purchasePriceCtl.clear();
+      _sellingPriceCtl.clear();
+      _quantityCtl.clear();
+      _selectedExpiryDate = DateTime.now().add(const Duration(days: 365));
+    });
+  }
+
+  void _populateSameBatch(ProductBatch batch) {
+    final currentBatches = ref.read(productBatchesProvider(widget.product.id)).asData?.value;
+    final newBatchNum = _generateBatchNumber(existingBatches: currentBatches);
+
+    setState(() {
+      _editingBatch = null;
       _clonedFromBatchNumber = batch.batchNumber;
-      _batchNumberCtl.text = batch.batchNumber;
-      _supplierNameCtl.text = batch.supplierName ?? '';
+      _batchNumberCtl.text = newBatchNum;
+      _supplierNameCtl.text = (batch.supplierName != null && batch.supplierName!.trim().isNotEmpty)
+          ? batch.supplierName!.trim()
+          : (widget.product.manufacturer.trim().isNotEmpty ? widget.product.manufacturer.trim() : 'Not Available');
+      _autocompleteSupplierCtl?.text = _supplierNameCtl.text;
       _purchasePriceCtl.text = batch.purchasePrice.toStringAsFixed(2);
       _sellingPriceCtl.text = batch.sellingPrice.toStringAsFixed(2);
-      _quantityCtl.text = '${batch.initialQuantity}';
+      _quantityCtl.text = '${batch.initialQuantity > 0 ? batch.initialQuantity : batch.currentStock}';
       _selectedExpiryDate = batch.expiryDate;
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Form populated with Batch #${batch.batchNumber} data. Please change the Batch Number.'),
+        content: Text('Form populated from Batch #${batch.batchNumber} with new Batch #$newBatchNum'),
         backgroundColor: AppColors.primary,
         duration: const Duration(seconds: 4),
       ),
     );
   }
 
-  Future<void> _submitNewBatch() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _startEditingBatch(ProductBatch batch) {
+    setState(() {
+      _editingBatch = batch;
+      _clonedFromBatchNumber = null;
+      _batchNumberCtl.text = batch.batchNumber;
+      _supplierNameCtl.text = (batch.supplierName != null && batch.supplierName!.trim().isNotEmpty)
+          ? batch.supplierName!.trim()
+          : (widget.product.manufacturer.trim().isNotEmpty ? widget.product.manufacturer.trim() : 'Not Available');
+      _autocompleteSupplierCtl?.text = _supplierNameCtl.text;
+      _purchasePriceCtl.text = batch.purchasePrice.toStringAsFixed(2);
+      _sellingPriceCtl.text = batch.sellingPrice.toStringAsFixed(2);
+      _quantityCtl.text = '${batch.currentStock}';
+      _selectedExpiryDate = batch.expiryDate;
+    });
 
-    final enteredBatch = _batchNumberCtl.text.trim();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Editing Batch #${batch.batchNumber}. Click "Edit Batch" when done.'),
+        backgroundColor: AppColors.primary,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
 
-    // Check if the user hasn't changed the batch number from cloned batch
-    // or if the batch number already exists for this medicine
-    final currentBatches = ref.read(productBatchesProvider(widget.product.id)).asData?.value ?? [];
-    final isUnchangedCloned = _clonedFromBatchNumber != null &&
-        enteredBatch.toLowerCase() == _clonedFromBatchNumber!.trim().toLowerCase();
-    final alreadyExists = isUnchangedCloned ||
-        currentBatches.any((b) => b.batchNumber.trim().toLowerCase() == enteredBatch.toLowerCase());
-
-    if (alreadyExists) {
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.warning_amber_rounded, color: AppColors.alertUrgent, size: 26),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text('Please Change Batch Number', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          content: Text(
-            isUnchangedCloned
-                ? 'You are adding a new batch using data from Batch "#$enteredBatch".\n\nPlease change the Batch Number before clicking "Add Batch".'
-                : 'A batch with number "#$enteredBatch" already exists for this medicine.\n\nPlease enter a new, unique Batch Number.',
-            style: const TextStyle(fontSize: 14),
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('OK'),
+  Future<void> _showDuplicateBatchDialog(String enteredBatch) async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppColors.alertUrgent, size: 26),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text('Duplicate Batch Number', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
+        content: Text(
+          'A batch with number "#$enteredBatch" already exists for this medicine.\n\nPlease enter a new, unique Batch Number.',
+          style: const TextStyle(fontSize: 14),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitBatch() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final enteredBatch = _batchNumberCtl.text.trim();
+    final currentBatches = ref.read(productBatchesProvider(widget.product.id)).asData?.value ?? [];
+
+    if (_editingBatch != null) {
+      // Editing existing batch
+      final duplicateExists = currentBatches.any(
+        (b) => b.id != _editingBatch!.id && b.batchNumber.trim().toLowerCase() == enteredBatch.toLowerCase(),
       );
-      return;
-    }
-
-    final session = ref.read(currentUserSessionProvider);
-    if (session == null) return;
-
-    setState(() => _isSaving = true);
-    final repo = ref.read(inventoryRepositoryProvider);
-
-    try {
-      final purchase = double.parse(_purchasePriceCtl.text);
-      final selling = double.parse(_sellingPriceCtl.text);
-      final qty = int.parse(_quantityCtl.text);
-
-      await repo.addBatch(
-        pharmacyUid: session.pharmacyUid,
-        productId: widget.product.id,
-        batchNumber: enteredBatch,
-        supplierName: _supplierNameCtl.text.isEmpty ? null : _supplierNameCtl.text,
-        purchasePrice: purchase,
-        sellingPrice: selling,
-        initialQuantity: qty,
-        expiryDate: _selectedExpiryDate,
-      );
-
-      _clonedFromBatchNumber = null;
-      _batchNumberCtl.clear();
-      _purchasePriceCtl.clear();
-      _sellingPriceCtl.clear();
-      _quantityCtl.clear();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Batch received successfully!'), backgroundColor: AppColors.accent),
-        );
-        setState(() => _isSaving = false);
+      if (duplicateExists) {
+        await _showDuplicateBatchDialog(enteredBatch);
+        return;
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add batch: $e'), backgroundColor: AppColors.alertCritical),
+
+      setState(() => _isSaving = true);
+      final repo = ref.read(inventoryRepositoryProvider);
+
+      try {
+        final purchase = double.parse(_purchasePriceCtl.text.trim());
+        final selling = double.parse(_sellingPriceCtl.text.trim());
+        final qty = int.parse(_quantityCtl.text.trim());
+
+        await repo.updateBatch(
+          batchId: _editingBatch!.id,
+          pharmacyUid: _editingBatch!.pharmacyUid,
+          productId: _editingBatch!.productId,
+          batchNumber: enteredBatch,
+          supplierName: _supplierNameCtl.text.trim(),
+          purchasePrice: purchase,
+          sellingPrice: selling,
+          currentStock: qty,
+          expiryDate: _selectedExpiryDate,
         );
-        setState(() => _isSaving = false);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Batch #$enteredBatch updated successfully!'),
+              backgroundColor: AppColors.accent,
+            ),
+          );
+          _cancelEdit(existingBatches: currentBatches);
+          setState(() => _isSaving = false);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update batch: $e'), backgroundColor: AppColors.alertCritical),
+          );
+          setState(() => _isSaving = false);
+        }
+      }
+    } else {
+      // Adding new batch
+      final alreadyExists = currentBatches.any((b) => b.batchNumber.trim().toLowerCase() == enteredBatch.toLowerCase());
+      if (alreadyExists) {
+        await _showDuplicateBatchDialog(enteredBatch);
+        return;
+      }
+
+      final session = ref.read(currentUserSessionProvider);
+      if (session == null) return;
+
+      setState(() => _isSaving = true);
+      final repo = ref.read(inventoryRepositoryProvider);
+
+      try {
+        final purchase = double.parse(_purchasePriceCtl.text.trim());
+        final selling = double.parse(_sellingPriceCtl.text.trim());
+        final qty = int.parse(_quantityCtl.text.trim());
+
+        await repo.addBatch(
+          pharmacyUid: session.pharmacyUid,
+          productId: widget.product.id,
+          batchNumber: enteredBatch,
+          supplierName: _supplierNameCtl.text.trim(),
+          purchasePrice: purchase,
+          sellingPrice: selling,
+          initialQuantity: qty,
+          expiryDate: _selectedExpiryDate,
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Batch #$enteredBatch added successfully!'),
+              backgroundColor: AppColors.accent,
+            ),
+          );
+          _cancelEdit(existingBatches: currentBatches);
+          setState(() => _isSaving = false);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to add batch: $e'), backgroundColor: AppColors.alertCritical),
+          );
+          setState(() => _isSaving = false);
+        }
       }
     }
   }
@@ -278,22 +407,38 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    const Expanded(
+                                    Expanded(
                                       child: Row(
                                         children: [
-                                          Icon(Icons.add_shopping_cart, color: AppColors.primary, size: 20),
-                                          SizedBox(width: 8),
+                                          Icon(
+                                            _editingBatch != null ? Icons.edit_note : Icons.add_shopping_cart,
+                                            color: AppColors.primary,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              'Procure / Receive New Batch (Multi-Supplier & Multi-Price)',
-                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primaryDark),
+                                              _editingBatch != null
+                                                  ? 'Edit Batch Details (Batch #${_editingBatch!.batchNumber})'
+                                                  : 'Procure / Receive New Batch (Multi-Supplier & Multi-Price)',
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppColors.primaryDark),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    if (margin != null)
+                                    if (_editingBatch != null)
+                                      TextButton.icon(
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: AppColors.alertCritical,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        icon: const Icon(Icons.close, size: 16),
+                                        label: const Text('Cancel Edit', style: TextStyle(fontWeight: FontWeight.bold)),
+                                        onPressed: () => _cancelEdit(),
+                                      ),
+                                    if (margin != null && _editingBatch == null)
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
@@ -311,7 +456,29 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                       ),
                                   ],
                                 ),
-                                if (_clonedFromBatchNumber != null) ...[
+                                if (_editingBatch != null) ...[
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.edit, size: 16, color: AppColors.primary),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Editing Batch #${_editingBatch!.batchNumber}. Modify the information below and click "Edit Batch" to save.',
+                                            style: const TextStyle(fontSize: 12, color: AppColors.primaryDark, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ] else if (_clonedFromBatchNumber != null) ...[
                                   const SizedBox(height: 12),
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -326,7 +493,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            'Pre-filled with data from Batch #$_clonedFromBatchNumber. Please change the Batch Number before adding.',
+                                            'Pre-filled with data from Batch #$_clonedFromBatchNumber. Batch number has been newly generated.',
                                             style: TextStyle(fontSize: 12, color: Colors.amber.shade900, fontWeight: FontWeight.w600),
                                           ),
                                         ),
@@ -348,12 +515,24 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                       flex: 2,
                                       child: TextFormField(
                                         controller: _batchNumberCtl,
-                                        decoration: const InputDecoration(
+                                        decoration: InputDecoration(
                                           labelText: 'Batch Number *',
-                                          hintText: 'e.g. B-2026-X01',
-                                          prefixIcon: Icon(Icons.qr_code, size: 18),
+                                          hintText: 'e.g. BA-20261106-01',
+                                          prefixIcon: const Icon(Icons.qr_code, size: 18),
+                                          suffixIcon: _editingBatch == null
+                                              ? IconButton(
+                                                  icon: const Icon(Icons.refresh, size: 16),
+                                                  tooltip: 'Regenerate Batch Number',
+                                                  onPressed: () {
+                                                    final batches = ref.read(productBatchesProvider(widget.product.id)).asData?.value;
+                                                    setState(() {
+                                                      _batchNumberCtl.text = _generateBatchNumber(existingBatches: batches);
+                                                    });
+                                                  },
+                                                )
+                                              : null,
                                         ),
-                                        validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                                        validator: (v) => v == null || v.trim().isEmpty ? 'Batch number required' : null,
                                       ),
                                     ),
                                     const SizedBox(width: 14),
@@ -362,18 +541,28 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                       child: Autocomplete<String>(
                                         initialValue: TextEditingValue(text: _supplierNameCtl.text),
                                         optionsBuilder: (textEditingValue) {
-                                          if (textEditingValue.text.isEmpty) return _distributorSuggestions;
-                                          return _distributorSuggestions.where((s) => s.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                                          final suggestions = _distributorSuggestions;
+                                          if (textEditingValue.text.isEmpty) return suggestions;
+                                          return suggestions.where((s) => s.toLowerCase().contains(textEditingValue.text.toLowerCase()));
                                         },
-                                        onSelected: (val) => _supplierNameCtl.text = val,
+                                        onSelected: (val) {
+                                          _supplierNameCtl.text = val;
+                                          _autocompleteSupplierCtl?.text = val;
+                                        },
                                         fieldViewBuilder: (ctx, ctl, focusNode, onEditingComplete) {
-                                          _supplierNameCtl.text = ctl.text;
+                                          _autocompleteSupplierCtl = ctl;
+                                          if (ctl.text != _supplierNameCtl.text && _supplierNameCtl.text.isNotEmpty) {
+                                            ctl.text = _supplierNameCtl.text;
+                                          }
+                                          ctl.addListener(() {
+                                            _supplierNameCtl.text = ctl.text;
+                                          });
                                           return TextFormField(
                                             controller: ctl,
                                             focusNode: focusNode,
                                             decoration: const InputDecoration(
                                               labelText: 'Supplier / Distributor Store *',
-                                              hintText: 'e.g. Apex Pharma, MediGlobal',
+                                              hintText: 'e.g. Acme, Apex Pharma, MediGlobal',
                                               prefixIcon: Icon(Icons.local_shipping_outlined, size: 18),
                                             ),
                                             validator: (v) => v == null || v.trim().isEmpty ? 'Supplier required' : null,
@@ -387,12 +576,17 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                       child: TextFormField(
                                         controller: _quantityCtl,
                                         keyboardType: TextInputType.number,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Units Received *',
+                                        decoration: InputDecoration(
+                                          labelText: _editingBatch != null ? 'Stock Units *' : 'Units Received *',
                                           hintText: 'e.g. 100',
-                                          prefixIcon: Icon(Icons.numbers, size: 18),
+                                          prefixIcon: const Icon(Icons.numbers, size: 18),
                                         ),
-                                        validator: (v) => v == null || int.tryParse(v) == null ? 'Invalid qty' : null,
+                                        validator: (v) {
+                                          if (v == null || v.trim().isEmpty) return 'Quantity required';
+                                          final val = int.tryParse(v.trim());
+                                          if (val == null || val < 0) return 'Invalid qty';
+                                          return null;
+                                        },
                                       ),
                                     ),
                                   ],
@@ -410,7 +604,12 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                           hintText: 'e.g. 1.25',
                                           prefixIcon: Icon(Icons.money_off, size: 18),
                                         ),
-                                        validator: (v) => v == null || double.tryParse(v) == null ? 'Invalid cost' : null,
+                                        validator: (v) {
+                                          if (v == null || v.trim().isEmpty) return 'Cost required';
+                                          final val = double.tryParse(v.trim());
+                                          if (val == null || val < 0) return 'Invalid cost';
+                                          return null;
+                                        },
                                       ),
                                     ),
                                     const SizedBox(width: 14),
@@ -424,7 +623,12 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                           hintText: 'e.g. 2.50',
                                           prefixIcon: Icon(Icons.attach_money, size: 18),
                                         ),
-                                        validator: (v) => v == null || double.tryParse(v) == null ? 'Invalid price' : null,
+                                        validator: (v) {
+                                          if (v == null || v.trim().isEmpty) return 'Price required';
+                                          final val = double.tryParse(v.trim());
+                                          if (val == null || val <= 0) return 'Invalid price';
+                                          return null;
+                                        },
                                       ),
                                     ),
                                     const SizedBox(width: 14),
@@ -457,15 +661,15 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                     const SizedBox(width: 14),
                                     ElevatedButton.icon(
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
+                                        backgroundColor: _editingBatch != null ? AppColors.primaryDark : AppColors.primary,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                                       ),
                                       icon: _isSaving
                                           ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                          : const Icon(Icons.check, size: 18),
-                                      label: const Text('Add Batch'),
-                                      onPressed: _isSaving ? null : _submitNewBatch,
+                                          : Icon(_editingBatch != null ? Icons.save_outlined : Icons.check, size: 18),
+                                      label: Text(_editingBatch != null ? 'Edit Batch' : 'Add Batch'),
+                                      onPressed: _isSaving ? null : _submitBatch,
                                     ),
                                   ],
                                 ),
@@ -669,7 +873,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         ),
                                       ),
 
-                                      // Actions (Add Same Batch, Adjust or Delete)
+                                      // Actions (Add Same Batch, Edit Batch or Delete)
                                       if (canManage)
                                         PopupMenuButton<String>(
                                           key: ValueKey('batch_popup_${batch.id}'),
@@ -677,8 +881,8 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                           onSelected: (val) async {
                                             if (val == 'same_batch') {
                                               _populateSameBatch(batch);
-                                            } else if (val == 'adjust') {
-                                              _showAdjustStockDialog(context, batch);
+                                            } else if (val == 'edit') {
+                                              _startEditingBatch(batch);
                                             } else if (val == 'delete') {
                                               final repo = ref.read(inventoryRepositoryProvider);
                                               await repo.deleteBatch(widget.product.pharmacyUid, batch.id);
@@ -695,8 +899,26 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                                 ],
                                               ),
                                             ),
-                                            const PopupMenuItem(value: 'adjust', child: Text('Adjust Stock Count')),
-                                            const PopupMenuItem(value: 'delete', child: Text('Delete Batch', style: TextStyle(color: AppColors.alertCritical))),
+                                            const PopupMenuItem(
+                                              value: 'edit',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.edit_outlined, size: 18, color: AppColors.primaryDark),
+                                                  SizedBox(width: 8),
+                                                  Text('Edit Batch'),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete_outline, size: 18, color: AppColors.alertCritical),
+                                                  SizedBox(width: 8),
+                                                  Text('Delete Batch', style: TextStyle(color: AppColors.alertCritical)),
+                                                ],
+                                              ),
+                                            ),
                                           ],
                                         ),
                                     ],
@@ -714,50 +936,6 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showAdjustStockDialog(BuildContext context, ProductBatch batch) {
-    final stockCtl = TextEditingController(text: '${batch.currentStock}');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('Adjust Stock for Batch #${batch.batchNumber}'),
-        content: SizedBox(
-          width: 320,
-          child: TextField(
-            controller: stockCtl,
-            keyboardType: TextInputType.number,
-            autofocus: true,
-            decoration: const InputDecoration(labelText: 'New Remaining Stock Units'),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-            onPressed: () async {
-              final newStock = int.tryParse(stockCtl.text);
-              if (newStock != null && newStock >= 0) {
-                final repo = ref.read(inventoryRepositoryProvider);
-                await repo.updateBatch(
-                  batchId: batch.id,
-                  pharmacyUid: batch.pharmacyUid,
-                  productId: batch.productId,
-                  batchNumber: batch.batchNumber,
-                  supplierName: batch.supplierName,
-                  purchasePrice: batch.purchasePrice,
-                  sellingPrice: batch.sellingPrice,
-                  currentStock: newStock,
-                  expiryDate: batch.expiryDate,
-                );
-                if (context.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Save Count'),
-          ),
-        ],
       ),
     );
   }

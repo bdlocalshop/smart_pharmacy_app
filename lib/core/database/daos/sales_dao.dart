@@ -522,6 +522,62 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
 
     return results;
   }
+
+  /// Fetches a single detailed sale record by sale ID with cashier and line item breakdown.
+  Future<DetailedSaleReport?> getDetailedSaleById(
+    String pharmacyUid,
+    String saleId,
+  ) async {
+    final sale = await (db.select(salesTable)
+          ..where((tbl) => tbl.id.equals(saleId) & tbl.pharmacyUid.equals(pharmacyUid)))
+        .getSingleOrNull();
+    if (sale == null) return null;
+
+    final user = await (db.select(db.usersTable)
+          ..where((tbl) => tbl.id.equals(sale.cashierUserId)))
+        .getSingleOrNull();
+
+    final itemQuery = (db.select(saleItemsTable)
+          ..where((tbl) => tbl.saleId.equals(saleId) & tbl.deletedAt.isNull()))
+        .join([
+      innerJoin(db.productsTable, db.productsTable.id.equalsExp(saleItemsTable.productId)),
+      innerJoin(productBatchesTable, productBatchesTable.id.equalsExp(saleItemsTable.batchId)),
+    ]);
+
+    final itemRows = await itemQuery.get();
+    final items = itemRows.map((row) {
+      final item = row.readTable(saleItemsTable);
+      final product = row.readTable(db.productsTable);
+      final batch = row.readTable(productBatchesTable);
+
+      return DetailedSaleItemReport(
+        id: item.id,
+        saleId: item.saleId,
+        invoiceNumber: sale.invoiceNumber,
+        saleDate: item.createdAt,
+        productId: product.id,
+        brandName: product.brandName,
+        genericName: product.genericName,
+        category: product.category,
+        batchId: batch.id,
+        batchNumber: batch.batchNumber,
+        expiryDate: batch.expiryDate,
+        quantity: item.quantity,
+        unitCostPrice: item.unitCostPrice,
+        unitSellingPrice: item.unitSellingPrice,
+        lineTotal: item.lineTotal,
+      );
+    }).toList();
+
+    final totalUnits = items.fold<int>(0, (sum, i) => sum + i.quantity);
+
+    return DetailedSaleReport(
+      sale: sale,
+      cashierName: user?.fullName ?? 'Staff Cashier',
+      totalUnits: totalUnits,
+      items: items,
+    );
+  }
 }
 
 /// Aggregated financial metrics container.

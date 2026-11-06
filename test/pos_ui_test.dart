@@ -10,6 +10,7 @@ import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_c
 import 'package:smart_pharmacy_app/features/pos/domain/pos_repository_interface.dart';
 import 'package:smart_pharmacy_app/features/pos/presentation/controllers/pos_controller.dart';
 import 'package:smart_pharmacy_app/features/pos/presentation/views/pos_billing_view.dart';
+import 'package:smart_pharmacy_app/features/reports/domain/report_models.dart';
 
 UserSession _createTestSession({UserRole role = UserRole.salesman}) {
   return UserSession(
@@ -177,6 +178,9 @@ class FakePosRepository implements IPosRepository {
 
   @override
   Future<Sale?> getSaleByInvoice(String pharmacyUid, String invoiceNumber) async => null;
+
+  @override
+  Future<DetailedSaleReport?> getDetailedSaleById(String pharmacyUid, String saleId) async => null;
 }
 
 void main() {
@@ -411,7 +415,17 @@ void main() {
       expect(find.text('INV-20261024-0001'), findsOneWidget);
       expect(find.text('৳30.00'), findsWidgets); // Total
       expect(find.text('৳20.00'), findsOneWidget); // Change
+      expect(find.text('Sales Receipt'), findsOneWidget);
       expect(find.text('New Sale (F1 / Enter)'), findsOneWidget);
+
+      // Tap Sales Receipt button
+      await tester.tap(find.text('Sales Receipt'));
+      await tester.pumpAndSettle();
+
+      // Verify Thermal Receipt Preview dialog opens
+      expect(find.text('Thermal Receipt Preview - INV-20261024-0001'), findsOneWidget);
+      expect(find.text('Print (80mm)'), findsOneWidget);
+      expect(find.text('Save Slip (.txt)'), findsOneWidget);
     });
 
     testWidgets('Editable quantity input supports direct entry, minimum 1 floor, and relative +/- steps without overflow', (tester) async {

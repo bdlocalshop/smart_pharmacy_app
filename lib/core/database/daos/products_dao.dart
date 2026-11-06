@@ -310,6 +310,7 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
   }
 
   /// Joined query computing aggregate active inventory stock per medicine.
+  /// Uses a single reactive SQL LEFT OUTER JOIN watching both products and batches for instant updates.
   Stream<List<ProductWithAggregateStock>> watchProductsWithAggregateStock(
     String pharmacyUid, {
     String? searchQuery,
@@ -317,17 +318,47 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // Watch all products
-    return watchProducts(pharmacyUid, searchQuery: searchQuery).asyncMap((products) async {
-      final results = <ProductWithAggregateStock>[];
+    final productSelect = select(productsTable)
+      ..where((tbl) => tbl.pharmacyUid.equals(pharmacyUid) & tbl.deletedAt.isNull());
 
-      for (final p in products) {
-        final batches = await (select(productBatchesTable)
-              ..where((tbl) =>
-                  tbl.pharmacyUid.equals(pharmacyUid) &
-                  tbl.productId.equals(p.id) &
-                  tbl.deletedAt.isNull()))
-            .get();
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      final term = '%${searchQuery.trim().toLowerCase()}%';
+      productSelect.where((tbl) =>
+          tbl.brandName.lower().like(term) |
+          tbl.genericName.lower().like(term) |
+          tbl.category.lower().like(term) |
+          tbl.shelfLocation.lower().like(term));
+    }
+
+    productSelect.orderBy([
+      (tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc),
+    ]);
+
+    final query = productSelect.join([
+      leftOuterJoin(
+        productBatchesTable,
+        productBatchesTable.productId.equalsExp(productsTable.id) &
+            productBatchesTable.deletedAt.isNull(),
+      ),
+    ]);
+
+    return query.watch().map((rows) {
+      final productMap = <String, Product>{};
+      final batchesByProduct = <String, List<ProductBatch>>{};
+
+      for (final row in rows) {
+        final p = row.readTable(productsTable);
+        productMap.putIfAbsent(p.id, () => p);
+
+        final b = row.readTableOrNull(productBatchesTable);
+        if (b != null) {
+          batchesByProduct.putIfAbsent(p.id, () => []).add(b);
+        }
+      }
+
+      final results = <ProductWithAggregateStock>[];
+      for (final p in productMap.values) {
+        final batches = batchesByProduct[p.id] ?? const [];
 
         int activeNonExpiredStock = 0;
         int expiredStock = 0;

@@ -6,6 +6,15 @@ import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
 import '../domain/csv_medicine_importer.dart';
 import '../domain/inventory_repository_interface.dart';
 
+/// Exception thrown when attempting to delete a medicine that still has unsold stock.
+class UnsoldStockException implements Exception {
+  final int unsoldQuantity;
+  UnsoldStockException(this.unsoldQuantity);
+
+  @override
+  String toString() => 'Cannot delete product: $unsoldQuantity unsold units remain in active inventory.';
+}
+
 /// Concrete data repository implementation for inventory and batch operations.
 class InventoryRepository implements IInventoryRepository {
   final AppDatabase db;
@@ -112,7 +121,12 @@ class InventoryRepository implements IInventoryRepository {
   }
 
   @override
-  Future<void> deleteProduct(String pharmacyUid, String productId) {
+  Future<void> deleteProduct(String pharmacyUid, String productId) async {
+    final batches = await _dao.watchBatchesForProduct(pharmacyUid, productId).first;
+    final totalUnsold = batches.fold<int>(0, (sum, b) => sum + b.currentStock);
+    if (totalUnsold > 0) {
+      throw UnsoldStockException(totalUnsold);
+    }
     return _dao.softDeleteProduct(pharmacyUid, productId);
   }
 

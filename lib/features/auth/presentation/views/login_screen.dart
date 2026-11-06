@@ -208,24 +208,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             constraints: const BoxConstraints(maxWidth: 880),
             child: Card(
               elevation: 0,
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
                 side: const BorderSide(color: AppColors.border, width: 1.5),
               ),
-              child: Row(
-                children: [
-                  // Left Branded Panel
-                  Expanded(
-                    flex: 5,
-                    child: Container(
-                      padding: const EdgeInsets.all(40),
-                      decoration: const BoxDecoration(
-                        gradient: AppColors.brandHeroGradient,
-                        borderRadius: BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          bottomLeft: Radius.circular(16),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Left Branded Panel
+                    Expanded(
+                      flex: 5,
+                      child: Container(
+                        padding: const EdgeInsets.all(40),
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.brandHeroGradient,
                         ),
-                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -458,31 +458,66 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
 
                             const SizedBox(height: 16),
-                            Wrap(
-                              alignment: WrapAlignment.center,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
-                              runSpacing: 4,
+                            Row(
                               children: [
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.primary,
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.primary,
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      icon: const Icon(Icons.cloud_sync_outlined, size: 15),
+                                      label: const Text(
+                                        'Cloud License Status',
+                                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      onPressed: _showCloudLicenseDialog,
+                                    ),
                                   ),
-                                  icon: const Icon(Icons.cloud_sync_outlined, size: 16),
-                                  label: const Text('Cloud License Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                                  onPressed: _showCloudLicenseDialog,
                                 ),
-                                TextButton.icon(
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.textSecondary,
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: AppColors.textSecondary,
+                                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      icon: const Icon(Icons.key_outlined, size: 15),
+                                      label: const Text(
+                                        'Activate License',
+                                        style: TextStyle(fontSize: 11.5),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      onPressed: _showActivateLicenseDialog,
+                                    ),
                                   ),
-                                  icon: const Icon(Icons.key_outlined, size: 16),
-                                  label: const Text('Activate License', style: TextStyle(fontSize: 12)),
-                                  onPressed: _showActivateLicenseDialog,
                                 ),
                               ],
+                            ),
+                            const SizedBox(height: 8),
+                            Center(
+                              child: TextButton.icon(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.textSecondary,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                icon: const Icon(Icons.app_registration_outlined, size: 16),
+                                label: const Text('Initial Setup', style: TextStyle(fontSize: 12)),
+                                onPressed: () {
+                                  ref.read(authControllerProvider.notifier).goToSetup();
+                                },
+                              ),
                             ),
                           ],
                         ),
@@ -494,6 +529,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

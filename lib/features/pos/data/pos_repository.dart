@@ -1,6 +1,7 @@
 import 'package:smart_pharmacy_app/core/database/app_database.dart';
 import 'package:smart_pharmacy_app/core/database/daos/products_dao.dart';
 import 'package:smart_pharmacy_app/core/database/daos/sales_dao.dart';
+import 'package:smart_pharmacy_app/features/reports/domain/report_models.dart';
 import '../domain/pos_repository_interface.dart';
 
 /// Concrete implementation of [IPosRepository] utilizing Drift SQLite DAOs.
@@ -57,6 +58,11 @@ class PosRepository implements IPosRepository {
   @override
   Future<Sale?> getSaleByInvoice(String pharmacyUid, String invoiceNumber) {
     return _db.salesDao.getSaleByInvoiceNumber(pharmacyUid, invoiceNumber);
+  }
+
+  @override
+  Future<DetailedSaleReport?> getDetailedSaleById(String pharmacyUid, String saleId) {
+    return _db.salesDao.getDetailedSaleById(pharmacyUid, saleId);
   }
 }
 

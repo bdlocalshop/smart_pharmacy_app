@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
 import 'package:smart_pharmacy_app/core/services/thermal_receipt_generator.dart';
+import 'package:smart_pharmacy_app/core/services/windows_printer_service.dart';
 
 /// Modal dialog showing live thermal receipt preview (80mm vs 58mm) and export/print options.
 class ReceiptPreviewDialog extends StatefulWidget {
@@ -18,6 +23,7 @@ class ReceiptPreviewDialog extends StatefulWidget {
 class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
   ThermalReceiptFormat _selectedFormat = ThermalReceiptFormat.mm80;
   bool _isSaving = false;
+  bool _isPrinting = false;
   String? _statusMessage;
 
   @override
@@ -198,19 +204,75 @@ class _ReceiptPreviewDialogState extends State<ReceiptPreviewDialog> {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                   ),
-                  icon: const Icon(Icons.print, size: 18),
-                  label: Text('Print (${_selectedFormat.label.split(' ').first})'),
-                  onPressed: () {
-                    // Generate ESC/POS command stream
-                    final escPos = ThermalReceiptGenerator.generateEscPosBytes(
-                      widget.receiptData,
-                      format: _selectedFormat,
-                    );
-                    setState(() {
-                      _statusMessage =
-                          'ESC/POS binary generated (${escPos.length} bytes ready for spooler)';
-                    });
-                  },
+                  icon: _isPrinting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.print, size: 18),
+                  label: Text(
+                    _isPrinting
+                        ? 'Printing...'
+                        : 'Print (${_selectedFormat.label.split(' ').first})',
+                  ),
+                  onPressed: _isPrinting
+                      ? null
+                      : () async {
+                          setState(() {
+                            _isPrinting = true;
+                            _statusMessage = 'Preparing print job...';
+                          });
+
+                          // 1. Save receipt slip file first so fallback is always available
+                          File? slipFile;
+                          try {
+                            slipFile = await ThermalReceiptGenerator.saveReceiptToFile(
+                              widget.receiptData,
+                              format: _selectedFormat,
+                            );
+                          } catch (_) {}
+
+                          bool printed = false;
+
+                          // 2. Try rich PDF print dialog first
+                          try {
+                            final is80mm = _selectedFormat == ThermalReceiptFormat.mm80;
+                            final rollFormat = is80mm
+                                ? PdfPageFormat.roll80
+                                : PdfPageFormat.roll57;
+
+                            printed = await Printing.layoutPdf(
+                              onLayout: (pageFormat) =>
+                                  ThermalReceiptGenerator.generatePdfReceipt(
+                                widget.receiptData,
+                                format: _selectedFormat,
+                              ),
+                              name: 'Receipt_${widget.receiptData.invoiceNumber}',
+                              format: rollFormat,
+                            );
+                          } on MissingPluginException catch (_) {
+                            // If running app was not rebuilt with the new C++ native plugin yet,
+                            // seamlessly print using Windows Native Print Spooler!
+                            if (slipFile != null && Platform.isWindows) {
+                              printed = await WindowsPrinterService.printTextFile(slipFile);
+                            }
+                          } catch (e) {
+                            // Fallback to Windows spooler if PDF layout fails
+                            if (slipFile != null && Platform.isWindows) {
+                              printed = await WindowsPrinterService.printTextFile(slipFile);
+                            }
+                          }
+
+                          if (mounted) {
+                            setState(() {
+                              _isPrinting = false;
+                              _statusMessage = printed
+                                  ? '✓ Printed to Windows default printer'
+                                  : 'Print job dispatched';
+                            });
+                          }
+                        },
                 ),
               ],
             ),

@@ -10,6 +10,10 @@ import 'package:smart_pharmacy_app/core/localization/language_controller.dart';
 import '../controllers/pos_controller.dart';
 import '../../domain/pos_models.dart';
 import '../../../../core/widgets/voice_input_suffix_icon.dart';
+import 'package:smart_pharmacy_app/core/services/thermal_receipt_generator.dart';
+import 'package:smart_pharmacy_app/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:smart_pharmacy_app/features/reports/domain/report_models.dart';
+import 'package:smart_pharmacy_app/features/reports/presentation/widgets/receipt_preview_dialog.dart';
 
 /// Desktop POS Billing Screen with typeahead search, shelf locations,
 /// smart FEFO allocation, dynamic cart calculations, and full keyboard shortcuts.
@@ -181,7 +185,19 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
             ],
           ),
         ),
+        actionsAlignment: MainAxisAlignment.spaceBetween,
         actions: [
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary, width: 1.5),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.receipt_long, size: 18),
+            label: const Text('Sales Receipt', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => _openReceiptDialog(sale),
+          ),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
@@ -197,6 +213,60 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openReceiptDialog(Sale sale) async {
+    final posRepo = ref.read(posRepositoryProvider);
+    final session = ref.read(currentUserSessionProvider);
+    final authState = ref.read(authControllerProvider);
+    final pharmacy = authState.pharmacySetting;
+
+    DetailedSaleReport? report;
+    try {
+      report = await posRepo.getDetailedSaleById(sale.pharmacyUid, sale.id);
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    final items = (report?.items ?? []).map((item) {
+      return ReceiptLineItem(
+        brandName: item.brandName,
+        genericName: item.genericName,
+        batchNumber: item.batchNumber,
+        expiryDate: item.expiryDate,
+        quantity: item.quantity,
+        unitSellingPrice: item.unitSellingPrice,
+        lineTotal: item.lineTotal,
+      );
+    }).toList();
+
+    final receiptData = ReceiptInvoiceData(
+      pharmacyName: pharmacy?.pharmacyName ?? session?.pharmacyName ?? 'Smart Pharmacy & Healthcare',
+      licenseNumber: pharmacy?.licenseNumber,
+      contactPhone: pharmacy?.contactPhone ?? '+880 1717-000000',
+      address: pharmacy?.address,
+      currencySymbol: pharmacy?.currencySymbol ?? session?.currencySymbol ?? '৳',
+      invoiceNumber: sale.invoiceNumber,
+      date: sale.createdAt,
+      cashierName: report?.cashierName ?? session?.fullName ?? 'Staff Cashier',
+      customerName: sale.customerName.isEmpty ? 'Walk-in Customer' : sale.customerName,
+      customerPhone: sale.customerPhone,
+      items: items,
+      subtotal: sale.subtotal,
+      discountAmount: sale.discountAmount,
+      taxAmount: sale.taxAmount,
+      totalPayable: sale.totalPayable,
+      paymentMethod: sale.paymentMethod,
+      amountTendered: sale.amountTendered,
+      changeReturned: sale.changeReturned,
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => ReceiptPreviewDialog(
+        receiptData: receiptData,
       ),
     );
   }
