@@ -9,6 +9,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/database/backup_manager.dart';
 import '../../../../core/database/database_provider.dart';
 import '../../../../core/localization/language_controller.dart';
+import '../../../inventory/presentation/views/inventory_search_dialog.dart';
 import '../controllers/auth_controller.dart';
 
 /// Key for storing custom backup directory preference in secure storage.
@@ -649,15 +650,14 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        icon: _isUploadingCloud
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-                              )
-                            : const Icon(Icons.cloud_upload_outlined, size: 18),
-                        label: Text(_isUploadingCloud ? 'Uploading to Cloud...' : 'Upload to Cloud Backup'),
-                        onPressed: _isUploadingCloud || _isBackingUp || _isRestoring ? null : () => _handleUploadToCloud(),
+                        icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                        label: const Text('Inventory Search'),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => const InventorySearchDialog(),
+                          );
+                        },
                       ),
                     ],
                   ),

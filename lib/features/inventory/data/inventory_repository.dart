@@ -317,4 +317,14 @@ class InventoryRepository implements IInventoryRepository {
       maxDays: maxDays,
     );
   }
+
+  @override
+  Stream<List<InventoryStatusItem>> watchInventoryStatus(String pharmacyUid) {
+    return _dao.watchInventoryStatus(pharmacyUid);
+  }
+
+  @override
+  Future<List<InventoryStatusItem>> getInventoryStatus(String pharmacyUid) {
+    return _dao.getInventoryStatus(pharmacyUid);
+  }
 }

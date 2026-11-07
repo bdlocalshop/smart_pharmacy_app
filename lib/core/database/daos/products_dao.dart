@@ -427,6 +427,171 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
       return results;
     });
   }
+
+  /// Stream of complete inventory valuation and status joining medicines and active batches.
+  Stream<List<InventoryStatusItem>> watchInventoryStatus(String pharmacyUid) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final query = (select(productsTable)
+          ..where((tbl) => tbl.pharmacyUid.equals(pharmacyUid) & tbl.deletedAt.isNull())
+          ..orderBy([(tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc)]))
+        .join([
+      leftOuterJoin(
+        productBatchesTable,
+        productBatchesTable.productId.equalsExp(productsTable.id) &
+            productBatchesTable.deletedAt.isNull(),
+      ),
+    ]);
+
+    return query.watch().map((rows) {
+      final productMap = <String, Product>{};
+      final batchesByProduct = <String, List<ProductBatch>>{};
+
+      for (final row in rows) {
+        final p = row.readTable(productsTable);
+        productMap.putIfAbsent(p.id, () => p);
+
+        final b = row.readTableOrNull(productBatchesTable);
+        if (b != null) {
+          batchesByProduct.putIfAbsent(p.id, () => []).add(b);
+        }
+      }
+
+      final results = <InventoryStatusItem>[];
+      for (final p in productMap.values) {
+        final batches = batchesByProduct[p.id] ?? const [];
+
+        int activeStock = 0;
+        int expiredStock = 0;
+        double purchaseCost = 0.0;
+        double saleValue = 0.0;
+
+        for (final b in batches) {
+          final isExpired = b.expiryDate.isBefore(today);
+          if (isExpired) {
+            expiredStock += b.currentStock;
+          } else {
+            activeStock += b.currentStock;
+          }
+          if (b.currentStock > 0 && !isExpired) {
+            purchaseCost += (b.currentStock * b.purchasePrice);
+            saleValue += (b.currentStock * b.sellingPrice);
+          }
+        }
+
+        results.add(
+          InventoryStatusItem(
+            product: p,
+            totalStock: activeStock + expiredStock,
+            activeStock: activeStock,
+            expiredStock: expiredStock,
+            totalPurchaseCost: purchaseCost,
+            totalSaleValue: saleValue,
+            batchCount: batches.where((b) => b.currentStock > 0 && !b.expiryDate.isBefore(today)).length,
+            batches: batches,
+          ),
+        );
+      }
+
+      return results;
+    });
+  }
+
+  /// Fetches complete inventory valuation and status joining medicines and active batches.
+  Future<List<InventoryStatusItem>> getInventoryStatus(String pharmacyUid) async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final query = (select(productsTable)
+          ..where((tbl) => tbl.pharmacyUid.equals(pharmacyUid) & tbl.deletedAt.isNull())
+          ..orderBy([(tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc)]))
+        .join([
+      leftOuterJoin(
+        productBatchesTable,
+        productBatchesTable.productId.equalsExp(productsTable.id) &
+            productBatchesTable.deletedAt.isNull(),
+      ),
+    ]);
+
+    final rows = await query.get();
+    final productMap = <String, Product>{};
+    final batchesByProduct = <String, List<ProductBatch>>{};
+
+    for (final row in rows) {
+      final p = row.readTable(productsTable);
+      productMap.putIfAbsent(p.id, () => p);
+
+      final b = row.readTableOrNull(productBatchesTable);
+      if (b != null) {
+        batchesByProduct.putIfAbsent(p.id, () => []).add(b);
+      }
+    }
+
+    final results = <InventoryStatusItem>[];
+    for (final p in productMap.values) {
+      final batches = batchesByProduct[p.id] ?? const [];
+
+      int activeStock = 0;
+      int expiredStock = 0;
+      double purchaseCost = 0.0;
+      double saleValue = 0.0;
+
+      for (final b in batches) {
+        final isExpired = b.expiryDate.isBefore(today);
+        if (isExpired) {
+          expiredStock += b.currentStock;
+        } else {
+          activeStock += b.currentStock;
+        }
+        if (b.currentStock > 0 && !isExpired) {
+          purchaseCost += (b.currentStock * b.purchasePrice);
+          saleValue += (b.currentStock * b.sellingPrice);
+        }
+      }
+
+      results.add(
+        InventoryStatusItem(
+          product: p,
+          totalStock: activeStock + expiredStock,
+          activeStock: activeStock,
+          expiredStock: expiredStock,
+          totalPurchaseCost: purchaseCost,
+          totalSaleValue: saleValue,
+          batchCount: batches.where((b) => b.currentStock > 0 && !b.expiryDate.isBefore(today)).length,
+          batches: batches,
+        ),
+      );
+    }
+
+    return results;
+  }
+}
+
+/// Helper model detailing complete inventory status, batch breakdown, and financial valuation per medicine.
+class InventoryStatusItem {
+  final Product product;
+  final int totalStock;
+  final int activeStock;
+  final int expiredStock;
+  final double totalPurchaseCost;
+  final double totalSaleValue;
+  final int batchCount;
+  final List<ProductBatch> batches;
+
+  const InventoryStatusItem({
+    required this.product,
+    required this.totalStock,
+    required this.activeStock,
+    required this.expiredStock,
+    required this.totalPurchaseCost,
+    required this.totalSaleValue,
+    required this.batchCount,
+    required this.batches,
+  });
+
+  double get estimatedProfit => (totalSaleValue - totalPurchaseCost).clamp(0.0, double.infinity);
+  double get grossMargin => totalSaleValue > 0 ? ((totalSaleValue - totalPurchaseCost) / totalSaleValue) * 100.0 : 0.0;
 }
 
 /// Helper model representing batch stock allocated and deducted via FEFO.

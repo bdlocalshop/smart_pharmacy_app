@@ -87,5 +87,11 @@ abstract class IInventoryRepository {
     int minDays = 0,
     required int maxDays,
   });
+
+  /// Stream of complete inventory valuation status joining active medicines and batches.
+  Stream<List<InventoryStatusItem>> watchInventoryStatus(String pharmacyUid);
+
+  /// Fetches complete inventory valuation status joining active medicines and batches.
+  Future<List<InventoryStatusItem>> getInventoryStatus(String pharmacyUid);
 }
 

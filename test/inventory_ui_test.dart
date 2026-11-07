@@ -141,6 +141,12 @@ class _FakeInventoryRepository implements IInventoryRepository {
 
   @override
   Stream<List<ProductWithAggregateStock>> watchProducts(String pharmacyUid, {String? searchQuery}) => const Stream.empty();
+
+  @override
+  Stream<List<InventoryStatusItem>> watchInventoryStatus(String pharmacyUid) => const Stream.empty();
+
+  @override
+  Future<List<InventoryStatusItem>> getInventoryStatus(String pharmacyUid) async => [];
 }
 
 UserSession _createTestSession({UserRole role = UserRole.owner}) {

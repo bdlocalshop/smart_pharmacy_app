@@ -67,6 +67,14 @@ final distinctUnitTypesProvider = StreamProvider<List<String>>((ref) {
   return repo.watchDistinctUnitTypes(session.pharmacyUid);
 });
 
+/// Stream of complete inventory valuation and status per medicine.
+final inventoryStatusProvider = StreamProvider<List<InventoryStatusItem>>((ref) {
+  final session = ref.watch(currentUserSessionProvider);
+  if (session == null) return const Stream.empty();
+  final repo = ref.watch(inventoryRepositoryProvider);
+  return repo.watchInventoryStatus(session.pharmacyUid);
+});
+
 // --- Expiry Radar Providers ---
 
 /// Stream of strictly expired batches (critical alert - blocked from POS cart additions).
