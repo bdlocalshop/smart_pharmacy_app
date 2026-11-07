@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:smart_pharmacy_app/core/network/cloud_license_service.dart';
 import 'package:smart_pharmacy_app/core/network/hmac_signer.dart';
 import 'package:smart_pharmacy_app/core/services/secure_storage_service.dart';
 
@@ -47,6 +48,29 @@ void main() {
 
       final deviceUuid2 = await storage.getOrCreateDeviceUuid();
       expect(deviceUuid2, equals(deviceUuid1)); // Must remain consistent
+    });
+
+    test('isConnectionError accurately identifies network down and unreachable server', () {
+      expect(CloudLicenseService.isConnectionError('SocketException: OS Error: Network unreachable'), isTrue);
+      expect(CloudLicenseService.isConnectionError('ClientException: Connection refused, uri=http://127.0.0.1:8000/api/v1/pharmacy/register'), isTrue);
+      expect(CloudLicenseService.isConnectionError('TimeoutException after 0:00:15.000000'), isTrue);
+      expect(CloudLicenseService.isConnectionError('AppException: HTTP Error 503'), isTrue);
+      expect(CloudLicenseService.isConnectionError('ValidationException: The trade license is already registered'), isFalse);
+    });
+
+    test('sanitizeErrorMessage strips sensitive API endpoints and returns friendly message', () {
+      final sanitized1 = CloudLicenseService.sanitizeErrorMessage(
+        'ClientException with SocketException: Connection refused (OS Error: Connection refused, errno = 111), address = 127.0.0.1, port = 8000, uri=http://127.0.0.1:8000/api/v1/pharmacy/register',
+      );
+      expect(sanitized1, equals('Unable to reach the registration server. Please check your internet connection and try again.'));
+      expect(sanitized1.contains('127.0.0.1'), isFalse);
+      expect(sanitized1.contains('/api/v1'), isFalse);
+
+      final sanitized2 = CloudLicenseService.sanitizeErrorMessage(
+        'AppException: Trade license number has already been taken.',
+      );
+      expect(sanitized2, equals('Trade license number has already been taken.'));
+      expect(sanitized2.contains('AppException'), isFalse);
     });
   });
 }

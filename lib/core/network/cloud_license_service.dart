@@ -27,6 +27,7 @@ class CloudRegistrationResult {
   final String? clientSecret;
   final String? verificationStatus;
   final String? message;
+  final bool isConnectionError;
 
   const CloudRegistrationResult({
     required this.success,
@@ -36,6 +37,7 @@ class CloudRegistrationResult {
     this.clientSecret,
     this.verificationStatus,
     this.message,
+    this.isConnectionError = false,
   });
 }
 
@@ -168,11 +170,50 @@ class CloudLicenseService {
         message: res['message']?.toString() ?? 'Pharmacy registered successfully and device bound.',
       );
     } catch (e) {
+      final isConn = isConnectionError(e);
       return CloudRegistrationResult(
         success: false,
-        message: e.toString().replaceFirst('AppException: ', ''),
+        isConnectionError: isConn,
+        message: isConn
+            ? 'Unable to reach the registration server. Please check your internet connection and try again.'
+            : sanitizeErrorMessage(e.toString()),
       );
     }
+  }
+
+  /// Identifies if an error is due to missing internet or unreachable server API.
+  static bool isConnectionError(dynamic e) {
+    if (e is SocketException) return true;
+    final str = e.toString().toLowerCase();
+    return str.contains('socketexception') ||
+        str.contains('connection refused') ||
+        str.contains('connection failed') ||
+        str.contains('failed host lookup') ||
+        str.contains('network is unreachable') ||
+        str.contains('timed out') ||
+        str.contains('timeout') ||
+        str.contains('clientexception') ||
+        str.contains('xmlhttprequest') ||
+        str.contains('handshakeexception') ||
+        str.contains('http error 502') ||
+        str.contains('http error 503') ||
+        str.contains('http error 504') ||
+        str.contains('http error 404');
+  }
+
+  /// Sanitizes raw error strings to prevent leaking internal endpoints or IP addresses to end users.
+  static String sanitizeErrorMessage(String rawMessage) {
+    if (isConnectionError(rawMessage)) {
+      return 'Unable to reach the registration server. Please check your internet connection and try again.';
+    }
+
+    var clean = rawMessage
+        .replaceFirst(RegExp(r'^(AppException|Exception):\s*'), '')
+        .replaceFirst(RegExp(r'^API (request|connection) failed:\s*'), '');
+
+    // Strip any leaked http/https URLs or IP endpoints
+    clean = clean.replaceAll(RegExp(r'https?://[^\s]+'), '[server]');
+    return clean.trim();
   }
 
   /// Validates license with HMAC-SHA256 signature and issues a cloud session token.

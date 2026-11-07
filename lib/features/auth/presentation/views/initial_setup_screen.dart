@@ -31,7 +31,6 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  bool _registerWithCloud = true;
   bool _isProcessing = false;
 
   @override
@@ -51,7 +50,7 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
     super.dispose();
   }
 
-  Future<void> _submitSetup({bool forceOffline = false}) async {
+  Future<void> _submitSetup() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isProcessing = true);
@@ -69,84 +68,35 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
       cleanMapUrl = null;
     }
 
-    // 1. If cloud registration is checked, register in the cloud backend FIRST
-    if (_registerWithCloud && !forceOffline) {
-      final cloudService = ref.read(cloudLicenseServiceProvider);
-      final tradeLicense = _licenseController.text.trim().isNotEmpty
-          ? _licenseController.text.trim()
-          : 'TL-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch % 100000}';
+    // 1. Mandatory cloud registration and hardware device binding (Internet required)
+    final cloudService = ref.read(cloudLicenseServiceProvider);
+    final tradeLicense = _licenseController.text.trim().isNotEmpty
+        ? _licenseController.text.trim()
+        : 'TL-${DateTime.now().year}-${DateTime.now().millisecondsSinceEpoch % 100000}';
 
-      final regResult = await cloudService.registerPharmacy(
-        pharmacyName: _pharmacyNameController.text,
-        tradeLicenseNumber: tradeLicense,
-        pharmacyAddress: _addressController.text.trim(),
-        pharmacyPhone: _phoneController.text.trim(),
-        mapLocationUrl: cleanMapUrl,
-        ownerName: _ownerFullNameController.text.trim(),
-        ownerPhone: _ownerPhoneController.text.trim(),
-        ownerEmail: _ownerEmailController.text.trim().isEmpty ? null : _ownerEmailController.text.trim(),
-        password: _ownerPasswordController.text,
-        passwordConfirmation: _confirmPasswordController.text,
-      );
+    final regResult = await cloudService.registerPharmacy(
+      pharmacyName: _pharmacyNameController.text,
+      tradeLicenseNumber: tradeLicense,
+      pharmacyAddress: _addressController.text.trim(),
+      pharmacyPhone: _phoneController.text.trim(),
+      mapLocationUrl: cleanMapUrl,
+      ownerName: _ownerFullNameController.text.trim(),
+      ownerPhone: _ownerPhoneController.text.trim(),
+      ownerEmail: _ownerEmailController.text.trim().isEmpty ? null : _ownerEmailController.text.trim(),
+      password: _ownerPasswordController.text,
+      passwordConfirmation: _confirmPasswordController.text,
+    );
 
-      if (!regResult.success) {
-        if (mounted) {
-          setState(() => _isProcessing = false);
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.cloud_off, color: AppColors.alertCritical),
-                  SizedBox(width: 10),
-                  Text('Cloud Registration Notice'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    regResult.message ?? 'Unable to connect to the cloud API server.',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Ensure your web server (pharmacy-sas) is running, or proceed with offline-only setup for now.',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _submitSetup(forceOffline: true);
-                  },
-                  child: const Text('Proceed Offline Only'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    _submitSetup();
-                  },
-                  child: const Text('Retry Connection'),
-                ),
-              ],
-            ),
-          );
-        }
-        return;
+    if (!regResult.success) {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+        _showRegistrationErrorDialog(regResult);
       }
+      return;
+    }
 
-      if (regResult.licenseKey != null) {
-        await cloudService.validateLicense();
-      }
+    if (regResult.licenseKey != null) {
+      await cloudService.validateLicense();
     }
 
     // 2. Complete local store database initialization
@@ -165,6 +115,81 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
     );
 
     if (mounted) setState(() => _isProcessing = false);
+  }
+
+  void _showRegistrationErrorDialog(CloudRegistrationResult regResult) {
+    final isConnectionIssue = regResult.isConnectionError;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.alertCritical.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                isConnectionIssue ? Icons.wifi_off_rounded : Icons.error_outline_rounded,
+                color: AppColors.alertCritical,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isConnectionIssue ? 'Internet Connection Required' : 'Registration Notice',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 440,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isConnectionIssue
+                    ? 'An active internet connection is required to complete pharmacy registration. We could not reach the registration service.'
+                    : (regResult.message ?? 'Registration could not be completed at this time.'),
+                style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Please check your internet connection and try again.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Retry Registration', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _submitSetup();
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -425,29 +450,27 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                  padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: AppColors.primary.withValues(alpha: 0.06),
                                     borderRadius: BorderRadius.circular(8),
                                     border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
                                   ),
-                                  child: Row(
+                                  child: const Row(
                                     children: [
-                                      Checkbox(
-                                        value: _registerWithCloud,
-                                        activeColor: AppColors.primary,
-                                        onChanged: (v) => setState(() => _registerWithCloud = v ?? true),
-                                      ),
-                                      const Expanded(
+                                      Icon(Icons.wifi, color: AppColors.primary, size: 20),
+                                      SizedBox(width: 10),
+                                      Expanded(
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              'Register & Bind Device to Cloud API',
+                                              'Online Registration (Mandatory)',
                                               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.primaryDark),
                                             ),
+                                            SizedBox(height: 2),
                                             Text(
-                                              'Enforces 1-device license binding with cloud backup capability.',
+                                              'An active internet connection is required to register and bind this device.',
                                               style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                             ),
                                           ],
@@ -527,8 +550,8 @@ class _InitialSetupScreenState extends ConsumerState<InitialSetupScreen> {
                                 : const Icon(Icons.check_circle_outline),
                             label: Text(
                               (_isProcessing || authState.isSubmitting)
-                                  ? 'Initializing Pharmacy & Cloud...'
-                                  : 'Complete Setup & Enter System',
+                                  ? 'Registering Pharmacy Online...'
+                                  : 'Complete Setup & Register',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                             ),
                             onPressed: (_isProcessing || authState.isSubmitting) ? null : _submitSetup,
