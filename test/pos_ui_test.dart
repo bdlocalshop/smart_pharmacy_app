@@ -290,7 +290,7 @@ void main() {
       // Verify Physical Shelf Location is prominently surfaced
       expect(find.text('Rack A-12'), findsOneWidget);
       // Verify FEFO Expiry indicator
-      expect(find.text('FEFO: 2027-04-15'), findsOneWidget);
+      expect(find.text('FEFO: 15-04-2027'), findsOneWidget);
       // Verify Real-time Stock pill
       expect(find.text('150 in stock'), findsOneWidget);
 
@@ -303,7 +303,7 @@ void main() {
       expect(find.text('1 line items (1 total units)'), findsOneWidget);
       // Verify allocated batch pill
       expect(find.text('Batch #P-2026-01'), findsOneWidget);
-      expect(find.text('Exp: 2027-04-15'), findsOneWidget);
+      expect(find.text('Exp: 15-04-2027'), findsOneWidget);
     });
 
     testWidgets('Dynamic cart calculates line discounts, invoice discount, cash tendered, and change', (tester) async {

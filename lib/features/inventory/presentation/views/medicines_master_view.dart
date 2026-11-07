@@ -422,7 +422,7 @@ class _MedicinesMasterViewState extends ConsumerState<MedicinesMasterView> {
                               flex: 2,
                               child: item.earliestExpiry != null
                                   ? Text(
-                                      DateFormat('yyyy-MM-dd').format(item.earliestExpiry!),
+                                      DateFormat('dd-MM-yyyy').format(item.earliestExpiry!),
                                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
                                     )
                                   : Text(strings.noBatches, style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),

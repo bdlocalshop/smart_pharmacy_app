@@ -393,7 +393,7 @@ class _ExpiryRadarViewState extends ConsumerState<ExpiryRadarView> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            DateFormat('yyyy-MM-dd').format(b.expiryDate),
+                            DateFormat('dd-MM-yyyy').format(b.expiryDate),
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 13,

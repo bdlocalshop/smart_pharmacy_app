@@ -22,12 +22,14 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
 
   final _batchNumberCtl = TextEditingController();
   final _supplierNameCtl = TextEditingController();
+  final _quantityCtl = TextEditingController();
+  final _totalCostCtl = TextEditingController();
   final _purchasePriceCtl = TextEditingController();
   final _sellingPriceCtl = TextEditingController();
-  final _quantityCtl = TextEditingController();
   DateTime _selectedExpiryDate = DateTime.now().add(const Duration(days: 365));
 
   bool _isSaving = false;
+  bool _isCalculatingCost = false;
   String? _clonedFromBatchNumber;
   ProductBatch? _editingBatch;
   TextEditingController? _autocompleteSupplierCtl;
@@ -58,10 +60,61 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
   void dispose() {
     _batchNumberCtl.dispose();
     _supplierNameCtl.dispose();
+    _quantityCtl.dispose();
+    _totalCostCtl.dispose();
     _purchasePriceCtl.dispose();
     _sellingPriceCtl.dispose();
-    _quantityCtl.dispose();
     super.dispose();
+  }
+
+  void _onTotalCostChanged(String val) {
+    if (_isCalculatingCost) return;
+    final totalCost = double.tryParse(val.trim());
+    final qty = int.tryParse(_quantityCtl.text.trim());
+
+    if (totalCost != null && qty != null && qty > 0) {
+      _isCalculatingCost = true;
+      final unitCost = totalCost / qty;
+      _purchasePriceCtl.text = unitCost.toStringAsFixed(2);
+      _isCalculatingCost = false;
+    }
+    setState(() {});
+  }
+
+  void _onPurchasePriceChanged(String val) {
+    if (_isCalculatingCost) return;
+    final unitCost = double.tryParse(val.trim());
+    final qty = int.tryParse(_quantityCtl.text.trim());
+
+    if (unitCost != null && qty != null && qty > 0) {
+      _isCalculatingCost = true;
+      final total = unitCost * qty;
+      _totalCostCtl.text = total.toStringAsFixed(2);
+      _isCalculatingCost = false;
+    }
+    setState(() {});
+  }
+
+  void _onQuantityChanged(String val) {
+    if (_isCalculatingCost) return;
+    final qty = int.tryParse(val.trim());
+    if (qty != null && qty > 0) {
+      final totalCost = double.tryParse(_totalCostCtl.text.trim());
+      final unitCost = double.tryParse(_purchasePriceCtl.text.trim());
+
+      if (totalCost != null && totalCost > 0) {
+        _isCalculatingCost = true;
+        final calculatedUnitCost = totalCost / qty;
+        _purchasePriceCtl.text = calculatedUnitCost.toStringAsFixed(2);
+        _isCalculatingCost = false;
+      } else if (unitCost != null && unitCost > 0) {
+        _isCalculatingCost = true;
+        final calculatedTotal = unitCost * qty;
+        _totalCostCtl.text = calculatedTotal.toStringAsFixed(2);
+        _isCalculatingCost = false;
+      }
+    }
+    setState(() {});
   }
 
   String _generateBatchNumber({List<ProductBatch>? existingBatches}) {
@@ -94,9 +147,10 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
       final mfg = widget.product.manufacturer.trim();
       _supplierNameCtl.text = mfg.isNotEmpty ? mfg : 'Not Available';
       _autocompleteSupplierCtl?.text = _supplierNameCtl.text;
+      _quantityCtl.clear();
+      _totalCostCtl.clear();
       _purchasePriceCtl.clear();
       _sellingPriceCtl.clear();
-      _quantityCtl.clear();
       _selectedExpiryDate = DateTime.now().add(const Duration(days: 365));
     });
   }
@@ -104,6 +158,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
   void _populateSameBatch(ProductBatch batch) {
     final currentBatches = ref.read(productBatchesProvider(widget.product.id)).asData?.value;
     final newBatchNum = _generateBatchNumber(existingBatches: currentBatches);
+    final qty = batch.initialQuantity > 0 ? batch.initialQuantity : batch.currentStock;
 
     setState(() {
       _editingBatch = null;
@@ -113,9 +168,10 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
           ? batch.supplierName!.trim()
           : (widget.product.manufacturer.trim().isNotEmpty ? widget.product.manufacturer.trim() : 'Not Available');
       _autocompleteSupplierCtl?.text = _supplierNameCtl.text;
+      _quantityCtl.text = '$qty';
       _purchasePriceCtl.text = batch.purchasePrice.toStringAsFixed(2);
+      _totalCostCtl.text = (batch.purchasePrice * qty).toStringAsFixed(2);
       _sellingPriceCtl.text = batch.sellingPrice.toStringAsFixed(2);
-      _quantityCtl.text = '${batch.initialQuantity > 0 ? batch.initialQuantity : batch.currentStock}';
       _selectedExpiryDate = batch.expiryDate;
     });
 
@@ -137,9 +193,10 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
           ? batch.supplierName!.trim()
           : (widget.product.manufacturer.trim().isNotEmpty ? widget.product.manufacturer.trim() : 'Not Available');
       _autocompleteSupplierCtl?.text = _supplierNameCtl.text;
-      _purchasePriceCtl.text = batch.purchasePrice.toStringAsFixed(2);
-      _sellingPriceCtl.text = batch.sellingPrice.toStringAsFixed(2);
       _quantityCtl.text = '${batch.currentStock}';
+      _purchasePriceCtl.text = batch.purchasePrice.toStringAsFixed(2);
+      _totalCostCtl.text = (batch.purchasePrice * batch.currentStock).toStringAsFixed(2);
+      _sellingPriceCtl.text = batch.sellingPrice.toStringAsFixed(2);
       _selectedExpiryDate = batch.expiryDate;
     });
 
@@ -512,7 +569,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      flex: 2,
+                                      flex: 5,
                                       child: TextFormField(
                                         controller: _batchNumberCtl,
                                         decoration: InputDecoration(
@@ -535,9 +592,9 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         validator: (v) => v == null || v.trim().isEmpty ? 'Batch number required' : null,
                                       ),
                                     ),
-                                    const SizedBox(width: 14),
+                                    const SizedBox(width: 12),
                                     Expanded(
-                                      flex: 3,
+                                      flex: 6,
                                       child: Autocomplete<String>(
                                         initialValue: TextEditingValue(text: _supplierNameCtl.text),
                                         optionsBuilder: (textEditingValue) {
@@ -570,12 +627,13 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         },
                                       ),
                                     ),
-                                    const SizedBox(width: 14),
+                                    const SizedBox(width: 12),
                                     Expanded(
-                                      flex: 2,
+                                      flex: 4,
                                       child: TextFormField(
                                         controller: _quantityCtl,
                                         keyboardType: TextInputType.number,
+                                        onChanged: _onQuantityChanged,
                                         decoration: InputDecoration(
                                           labelText: _editingBatch != null ? 'Stock Units *' : 'Units Received *',
                                           hintText: 'e.g. 100',
@@ -589,6 +647,26 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                         },
                                       ),
                                     ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      flex: 5,
+                                      child: TextFormField(
+                                        controller: _totalCostCtl,
+                                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                        onChanged: _onTotalCostChanged,
+                                        decoration: const InputDecoration(
+                                          labelText: 'Total Cost (৳) *',
+                                          hintText: 'e.g. 350.00',
+                                          prefixIcon: Icon(Icons.calculate_outlined, size: 18),
+                                        ),
+                                        validator: (v) {
+                                          if (v == null || v.trim().isEmpty) return 'Total cost required';
+                                          final val = double.tryParse(v.trim());
+                                          if (val == null || val < 0) return 'Invalid total';
+                                          return null;
+                                        },
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 14),
@@ -598,7 +676,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                       child: TextFormField(
                                         controller: _purchasePriceCtl,
                                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                        onChanged: (_) => setState(() {}),
+                                        onChanged: _onPurchasePriceChanged,
                                         decoration: const InputDecoration(
                                           labelText: 'Purchase Cost Price (৳) *',
                                           hintText: 'e.g. 1.25',
@@ -652,7 +730,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                             prefixIcon: Icon(Icons.calendar_month, size: 18),
                                           ),
                                           child: Text(
-                                            DateFormat('yyyy-MM-dd').format(_selectedExpiryDate),
+                                            DateFormat('dd-MM-yyyy').format(_selectedExpiryDate),
                                             style: const TextStyle(fontWeight: FontWeight.bold),
                                           ),
                                         ),
@@ -852,7 +930,7 @@ class _BatchManagementDialogState extends ConsumerState<BatchManagementDialog> {
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
-                                              DateFormat('yyyy-MM-dd').format(batch.expiryDate),
+                                              DateFormat('dd-MM-yyyy').format(batch.expiryDate),
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 13,

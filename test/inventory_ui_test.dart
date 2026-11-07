@@ -395,17 +395,27 @@ void main() {
       // Verify Multi-Supplier Procurement Form Fields
       expect(find.text('Batch Number *'), findsOneWidget);
       expect(find.text('Supplier / Distributor Store *'), findsOneWidget);
+      expect(find.text('Units Received *'), findsOneWidget);
+      expect(find.text('Total Cost (৳) *'), findsOneWidget);
       expect(find.text('Purchase Cost Price (৳) *'), findsOneWidget);
       expect(find.text('Selling Price MRP (৳) *'), findsOneWidget);
-      expect(find.text('Units Received *'), findsOneWidget);
 
       // Verify Existing Batch is listed in FEFO Priority Table
       expect(find.text('Batch #BATCH-2026-X'), findsOneWidget);
       expect(find.text('Supplier: National Med Depot'), findsOneWidget);
       expect(find.text('FEFO Priority #1'), findsOneWidget);
+      // Verify Date format is DD-MM-YYYY in FEFO ledger
+      expect(find.text(DateFormat('dd-MM-yyyy').format(sampleBatch.expiryDate)), findsOneWidget);
 
-      // Enter Purchase Price $20.00 and Selling MRP $30.00 -> Verify Gross Margin calculation
-      await tester.enterText(find.widgetWithText(TextFormField, 'Purchase Cost Price (৳) *'), '20.00');
+      // Enter Units: 100 and Total Cost: $2000.00 -> Verify Purchase Price auto-calculates to $20.00
+      await tester.enterText(find.widgetWithText(TextFormField, 'Units Received *'), '100');
+      await tester.enterText(find.widgetWithText(TextFormField, 'Total Cost (৳) *'), '2000.00');
+      await tester.pump();
+
+      // Purchase Cost Price should automatically calculate: 2000 / 100 = 20.00
+      expect(find.widgetWithText(TextFormField, '20.00'), findsOneWidget);
+
+      // Enter Selling MRP $30.00 -> Verify Gross Margin calculation
       await tester.enterText(find.widgetWithText(TextFormField, 'Selling Price MRP (৳) *'), '30.00');
       await tester.pump();
 

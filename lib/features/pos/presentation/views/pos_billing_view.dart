@@ -36,7 +36,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
   final _tenderedCtl = TextEditingController();
 
   final _currencyFormat = NumberFormat.currency(symbol: '৳', decimalDigits: 2);
-  final _dateFormat = DateFormat('yyyy-MM-dd');
+  final _dateFormat = DateFormat('dd-MM-yyyy');
 
   @override
   void initState() {
