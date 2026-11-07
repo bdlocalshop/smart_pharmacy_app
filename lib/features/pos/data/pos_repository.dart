@@ -14,10 +14,13 @@ class PosRepository implements IPosRepository {
   Stream<List<ProductWithAggregateStock>> searchMedicines(
     String pharmacyUid, {
     String? searchQuery,
+    int? limit = 25,
   }) {
     return _db.productsDao.watchProductsWithAggregateStock(
       pharmacyUid,
       searchQuery: searchQuery,
+      limit: limit,
+      posSearchOnly: true,
     );
   }
 

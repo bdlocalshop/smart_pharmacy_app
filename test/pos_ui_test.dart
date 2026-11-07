@@ -90,16 +90,18 @@ class FakePosRepository implements IPosRepository {
   Stream<List<ProductWithAggregateStock>> searchMedicines(
     String pharmacyUid, {
     String? searchQuery,
+    int? limit = 25,
   }) {
     if (searchQuery == null || searchQuery.isEmpty) {
-      return Stream.value(products);
+      final list = limit != null && limit > 0 ? products.take(limit).toList() : products;
+      return Stream.value(list);
     }
     final q = searchQuery.toLowerCase();
     final filtered = products.where((p) =>
         p.product.brandName.toLowerCase().contains(q) ||
-        p.product.genericName.toLowerCase().contains(q) ||
-        p.product.shelfLocation.toLowerCase().contains(q));
-    return Stream.value(filtered.toList());
+        p.product.genericName.toLowerCase().contains(q));
+    final list = limit != null && limit > 0 ? filtered.take(limit).toList() : filtered.toList();
+    return Stream.value(list);
   }
 
   @override
@@ -280,7 +282,7 @@ void main() {
       // Type "Panadol" in search bar
       final searchField = find.byType(TextField).first;
       await tester.enterText(searchField, 'Panadol');
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
 
       // Verify Typeahead Search Results Panel appears
       expect(find.text('Panadol Advance 500mg'), findsOneWidget);

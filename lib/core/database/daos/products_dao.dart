@@ -347,9 +347,16 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
 
   /// Joined query computing aggregate active inventory stock per medicine.
   /// Uses a single reactive SQL LEFT OUTER JOIN watching both products and batches for instant updates.
+  /// Stream of medicines with aggregate stock, batch count, and earliest expiry.
+  /// If [searchQuery] is provided, filters by brand, generic, category, or shelf location.
+  /// When [posSearchOnly] is true, search is optimized for POS: focused exclusively on
+  /// brandName (Medicine Name) and genericName (Generic Formula), with prefix relevance
+  /// sorting and optional [limit] to handle catalogs with 30k+ medicines smoothly.
   Stream<List<ProductWithAggregateStock>> watchProductsWithAggregateStock(
     String pharmacyUid, {
     String? searchQuery,
+    int? limit,
+    bool posSearchOnly = false,
   }) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -358,17 +365,51 @@ class ProductsDao extends DatabaseAccessor<AppDatabase> with _$ProductsDaoMixin 
       ..where((tbl) => tbl.pharmacyUid.equals(pharmacyUid) & tbl.deletedAt.isNull());
 
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
-      final term = '%${searchQuery.trim().toLowerCase()}%';
-      productSelect.where((tbl) =>
-          tbl.brandName.lower().like(term) |
-          tbl.genericName.lower().like(term) |
-          tbl.category.lower().like(term) |
-          tbl.shelfLocation.lower().like(term));
+      final cleanQuery = searchQuery.trim();
+      final term = '%${cleanQuery.toLowerCase()}%';
+
+      if (posSearchOnly) {
+        // POS Search: strictly restricted to brandName (Medicine Name) & genericName (Generic Formula)
+        productSelect.where((tbl) =>
+            tbl.brandName.lower().like(term) |
+            tbl.genericName.lower().like(term));
+
+        // Prioritize prefix matches on brand name, then prefix on generic name, then alphabetical
+        final escapedPrefix = cleanQuery.toLowerCase().replaceAll("'", "''");
+        final escapedTerm = term.replaceAll("'", "''");
+        productSelect.orderBy([
+          (tbl) => OrderingTerm(
+                expression: CustomExpression<int>(
+                  "CASE "
+                  "WHEN lower(brand_name) LIKE '$escapedPrefix%' THEN 0 "
+                  "WHEN lower(brand_name) LIKE '$escapedTerm' THEN 1 "
+                  "WHEN lower(generic_name) LIKE '$escapedPrefix%' THEN 2 "
+                  "ELSE 3 END",
+                ),
+                mode: OrderingMode.asc,
+              ),
+          (tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc),
+        ]);
+      } else {
+        productSelect.where((tbl) =>
+            tbl.brandName.lower().like(term) |
+            tbl.genericName.lower().like(term) |
+            tbl.category.lower().like(term) |
+            tbl.shelfLocation.lower().like(term));
+
+        productSelect.orderBy([
+          (tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc),
+        ]);
+      }
+    } else {
+      productSelect.orderBy([
+        (tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc),
+      ]);
     }
 
-    productSelect.orderBy([
-      (tbl) => OrderingTerm(expression: tbl.brandName, mode: OrderingMode.asc),
-    ]);
+    if (limit != null && limit > 0) {
+      productSelect.limit(limit);
+    }
 
     final query = productSelect.join([
       leftOuterJoin(

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +39,21 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
   final _currencyFormat = NumberFormat.currency(symbol: '৳', decimalDigits: 2);
   final _dateFormat = DateFormat('dd-MM-yyyy');
 
+  Timer? _searchDebounceTimer;
+
+  void _onSearchChanged(String val, {bool immediate = false}) {
+    _searchDebounceTimer?.cancel();
+    if (immediate || val.isEmpty) {
+      ref.read(posSearchQueryProvider.notifier).state = val;
+    } else {
+      _searchDebounceTimer = Timer(const Duration(milliseconds: 150), () {
+        if (mounted) {
+          ref.read(posSearchQueryProvider.notifier).state = val;
+        }
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +64,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     _tenderFocusNode.dispose();
@@ -91,6 +108,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
     // Escape: Clear search
     else if (event.logicalKey == LogicalKeyboardKey.escape) {
       if (_searchController.text.isNotEmpty) {
+        _searchDebounceTimer?.cancel();
         _searchController.clear();
         ref.read(posSearchQueryProvider.notifier).state = '';
       }
@@ -412,6 +430,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                         IconButton(
                           icon: const Icon(Icons.clear, size: 18),
                           onPressed: () {
+                            _searchDebounceTimer?.cancel();
                             _searchController.clear();
                             ref.read(posSearchQueryProvider.notifier).state = '';
                           },
@@ -420,16 +439,18 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                         controller: _searchController,
                         tooltip: strings.posVoiceSearch,
                         onChanged: (val) {
-                          ref.read(posSearchQueryProvider.notifier).state = val;
+                          _onSearchChanged(val, immediate: true);
                         },
                       ),
                     ],
                   ),
                 ),
                 onChanged: (val) {
-                  ref.read(posSearchQueryProvider.notifier).state = val;
+                  _onSearchChanged(val);
                 },
                 onSubmitted: (val) {
+                  _searchDebounceTimer?.cancel();
+                  ref.read(posSearchQueryProvider.notifier).state = val;
                   // If barcode scanned or single exact match, add first item automatically
                   final results = ref.read(posSearchResultsProvider).value ?? [];
                   if (results.isNotEmpty) {
@@ -439,6 +460,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                             item.product,
                             availableStock: item.activeStock,
                           );
+                      _searchDebounceTimer?.cancel();
                       _searchController.clear();
                       ref.read(posSearchQueryProvider.notifier).state = '';
                       _searchFocusNode.requestFocus();
@@ -508,6 +530,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                                 p,
                                 availableStock: item.activeStock,
                               );
+                          _searchDebounceTimer?.cancel();
                           _searchController.clear();
                           ref.read(posSearchQueryProvider.notifier).state = '';
                           _searchFocusNode.requestFocus();
@@ -616,6 +639,7 @@ class _PosBillingViewState extends ConsumerState<PosBillingView> {
                                         p,
                                         availableStock: item.activeStock,
                                       );
+                                  _searchDebounceTimer?.cancel();
                                   _searchController.clear();
                                   ref.read(posSearchQueryProvider.notifier).state = '';
                                   _searchFocusNode.requestFocus();

@@ -6,9 +6,12 @@ import 'package:smart_pharmacy_app/features/reports/domain/report_models.dart';
 /// Contract for POS search, stock queries, and atomic checkout operations.
 abstract class IPosRepository {
   /// Stream of active medicines with aggregate stock for POS typeahead search.
+  /// When [searchQuery] is provided, search is restricted strictly to brandName
+  /// and genericName with prefix relevance ordering and optional [limit].
   Stream<List<ProductWithAggregateStock>> searchMedicines(
     String pharmacyUid, {
     String? searchQuery,
+    int? limit = 25,
   });
 
   /// Retrieves the earliest non-expired batch for a product according to FEFO.

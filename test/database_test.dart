@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:smart_pharmacy_app/core/constants/app_constants.dart';
@@ -175,6 +176,95 @@ void main() {
       expect(summary.grossRevenue, equals(11.50));
       expect(summary.totalCostPrice, equals(6.40));
       expect(summary.grossProfit, equals(5.10));
+    });
+  });
+
+  group('POS Fast Medicine Search Optimization Tests', () {
+    test('posSearchOnly restricts matching strictly to brandName and genericName', () async {
+      await seeder.seedIfEmpty();
+      final settings = await db.select(db.pharmacySettingsTable).getSingle();
+      final pharmacyUid = settings.pharmacyUid;
+
+      // "Rack A-1" is only in shelfLocation, not in brand or generic name
+      final posResults = await db.productsDao.watchProductsWithAggregateStock(
+        pharmacyUid,
+        searchQuery: 'Rack A-1',
+        posSearchOnly: true,
+      ).first;
+      expect(posResults, isEmpty);
+
+      // Standard search matches shelfLocation
+      final masterResults = await db.productsDao.watchProductsWithAggregateStock(
+        pharmacyUid,
+        searchQuery: 'Rack A-1',
+        posSearchOnly: false,
+      ).first;
+      expect(masterResults, isNotEmpty);
+
+      // Search by generic name works in POS search
+      final genericResults = await db.productsDao.watchProductsWithAggregateStock(
+        pharmacyUid,
+        searchQuery: 'Paracetamol',
+        posSearchOnly: true,
+      ).first;
+      expect(genericResults, isNotEmpty);
+      expect(genericResults.any((p) => p.product.genericName.contains('Paracetamol')), isTrue);
+    });
+
+    test('POS search respects limit and orders prefix matches first', () async {
+      await seeder.seedIfEmpty();
+      final settings = await db.select(db.pharmacySettingsTable).getSingle();
+      final pharmacyUid = settings.pharmacyUid;
+
+      // Limit test
+      final limitedResults = await db.productsDao.watchProductsWithAggregateStock(
+        pharmacyUid,
+        searchQuery: 'a',
+        posSearchOnly: true,
+        limit: 2,
+      ).first;
+      expect(limitedResults.length, lessThanOrEqualTo(2));
+
+      // Prefix ranking test: Insert a product with generic matching query and a product with brand starting with query
+      final now = DateTime.now();
+      await db.productsDao.insertProduct(
+        ProductsTableCompanion.insert(
+          id: 'test-prod-substring',
+          pharmacyUid: pharmacyUid,
+          brandName: 'Z-Pill',
+          genericName: 'SuperFast Compound',
+          category: 'Analgesic',
+          manufacturer: 'Test Labs',
+          shelfLocation: 'A-1',
+          unitType: const Value('Tablet'),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+      await db.productsDao.insertProduct(
+        ProductsTableCompanion.insert(
+          id: 'test-prod-prefix',
+          pharmacyUid: pharmacyUid,
+          brandName: 'SuperFast Relief',
+          genericName: 'Other Compound',
+          category: 'Analgesic',
+          manufacturer: 'Test Labs',
+          shelfLocation: 'A-2',
+          unitType: const Value('Tablet'),
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+
+      final prefixResults = await db.productsDao.watchProductsWithAggregateStock(
+        pharmacyUid,
+        searchQuery: 'SuperFast',
+        posSearchOnly: true,
+      ).first;
+      expect(prefixResults.length, equals(2));
+      // Prefix on brandName ("SuperFast Relief") must be ordered first
+      expect(prefixResults.first.product.brandName, equals('SuperFast Relief'));
+      expect(prefixResults.last.product.brandName, equals('Z-Pill'));
     });
   });
 }

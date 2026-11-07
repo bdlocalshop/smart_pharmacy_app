@@ -67,6 +67,14 @@ class AppDatabase extends _$AppDatabase {
               await customStatement('ALTER TABLE pharmacy_settings ADD COLUMN map_pin_url TEXT;');
             }
           } catch (_) {}
+          try {
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_products_pos_brand ON products (pharmacy_uid, deleted_at, brand_name COLLATE NOCASE);',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_products_pos_generic ON products (pharmacy_uid, deleted_at, generic_name COLLATE NOCASE);',
+            );
+          } catch (_) {}
         },
       );
 }
