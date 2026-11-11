@@ -66,9 +66,17 @@ class SecureStorageService {
   static const String _keyCloudClientSecret = 'smart_pharmacy_cloud_client_secret';
   static const String _keyCloudSessionToken = 'smart_pharmacy_cloud_session_token';
   static const String _keyCloudPharmacyId = 'smart_pharmacy_cloud_pharmacy_id';
+  static const String _keyCloudValidUntil = 'smart_pharmacy_cloud_valid_until';
+  static const String _keyCloudDaysRemaining = 'smart_pharmacy_cloud_days_remaining';
+  static const String _keyCloudLicenseStatus = 'smart_pharmacy_cloud_license_status';
+  static const String _keyCustomBackupDir = 'app_custom_backup_directory';
 
   SecureStorageService([ISecureStorageClient? client])
       : _client = client ?? FlutterSecureStorageClient();
+
+  Future<String?> getCustomBackupDirectory() => _client.read(key: _keyCustomBackupDir);
+  Future<void> saveCustomBackupDirectory(String path) => _client.write(key: _keyCustomBackupDir, value: path);
+  Future<void> clearCustomBackupDirectory() => _client.delete(key: _keyCustomBackupDir);
 
   /// Gets or initializes persistent hardware device UUID for hardware-binding.
   Future<String> getOrCreateDeviceUuid() async {
@@ -83,12 +91,14 @@ class SecureStorageService {
 
   Future<void> saveCloudCredentials({
     required String licenseKey,
-    required String clientSecret,
+    String? clientSecret,
     String? pharmacyId,
     String? sessionToken,
   }) async {
     await _client.write(key: _keyCloudLicenseKey, value: licenseKey);
-    await _client.write(key: _keyCloudClientSecret, value: clientSecret);
+    if (clientSecret != null) {
+      await _client.write(key: _keyCloudClientSecret, value: clientSecret);
+    }
     if (pharmacyId != null) {
       await _client.write(key: _keyCloudPharmacyId, value: pharmacyId);
     }
@@ -102,11 +112,61 @@ class SecureStorageService {
   Future<String?> getCloudSessionToken() => _client.read(key: _keyCloudSessionToken);
   Future<String?> getCloudPharmacyId() => _client.read(key: _keyCloudPharmacyId);
 
+  Future<void> saveLicenseSession({
+    DateTime? validUntil,
+    int? daysRemaining,
+    String? status,
+  }) async {
+    if (validUntil != null) {
+      await _client.write(key: _keyCloudValidUntil, value: validUntil.toIso8601String());
+    }
+    if (daysRemaining != null) {
+      await _client.write(key: _keyCloudDaysRemaining, value: daysRemaining.toString());
+    }
+    if (status != null) {
+      await _client.write(key: _keyCloudLicenseStatus, value: status);
+    }
+  }
+
+  Future<DateTime?> getLicenseValidUntil() async {
+    final str = await _client.read(key: _keyCloudValidUntil);
+    if (str == null || str.isEmpty) return null;
+    return DateTime.tryParse(str);
+  }
+
+  Future<int?> getLicenseDaysRemaining() async {
+    final str = await _client.read(key: _keyCloudDaysRemaining);
+    if (str == null || str.isEmpty) return null;
+    return int.tryParse(str);
+  }
+
+  Future<String?> getLicenseStatus() => _client.read(key: _keyCloudLicenseStatus);
+
+  /// Evaluates whether the stored cloud license has expired locally.
+  Future<bool> isLicenseSessionExpired() async {
+    final status = await getLicenseStatus();
+    if (status != null && status.toUpperCase() == 'EXPIRED') {
+      return true;
+    }
+    final validUntil = await getLicenseValidUntil();
+    if (validUntil != null) {
+      return DateTime.now().isAfter(validUntil);
+    }
+    final days = await getLicenseDaysRemaining();
+    if (days != null && days <= 0) {
+      return true;
+    }
+    return false;
+  }
+
   Future<void> clearCloudCredentials() async {
     await _client.delete(key: _keyCloudLicenseKey);
     await _client.delete(key: _keyCloudClientSecret);
     await _client.delete(key: _keyCloudSessionToken);
     await _client.delete(key: _keyCloudPharmacyId);
+    await _client.delete(key: _keyCloudValidUntil);
+    await _client.delete(key: _keyCloudDaysRemaining);
+    await _client.delete(key: _keyCloudLicenseStatus);
   }
 
   /// Persists user session in desktop secure credentials manager.

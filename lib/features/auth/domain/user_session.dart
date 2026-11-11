@@ -12,6 +12,8 @@ class UserSession {
   final String currencySymbol;
   final String token;
   final DateTime loginTimestamp;
+  final bool isDeviceBound;
+  final bool isLicenseExpired;
 
   const UserSession({
     required this.userId,
@@ -23,6 +25,8 @@ class UserSession {
     required this.currencySymbol,
     required this.token,
     required this.loginTimestamp,
+    this.isDeviceBound = true,
+    this.isLicenseExpired = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -36,6 +40,8 @@ class UserSession {
       'currency_symbol': currencySymbol,
       'token': token,
       'login_timestamp': loginTimestamp.toIso8601String(),
+      'is_device_bound': isDeviceBound,
+      'is_license_expired': isLicenseExpired,
     };
   }
 
@@ -50,6 +56,8 @@ class UserSession {
       currencySymbol: (map['currency_symbol'] as String?) ?? '৳',
       token: map['token'] as String,
       loginTimestamp: DateTime.parse(map['login_timestamp'] as String),
+      isDeviceBound: (map['is_device_bound'] as bool?) ?? true,
+      isLicenseExpired: (map['is_license_expired'] as bool?) ?? false,
     );
   }
 
@@ -68,6 +76,8 @@ class UserSession {
     String? currencySymbol,
     String? token,
     DateTime? loginTimestamp,
+    bool? isDeviceBound,
+    bool? isLicenseExpired,
   }) {
     return UserSession(
       userId: userId ?? this.userId,
@@ -79,6 +89,8 @@ class UserSession {
       currencySymbol: currencySymbol ?? this.currencySymbol,
       token: token ?? this.token,
       loginTimestamp: loginTimestamp ?? this.loginTimestamp,
+      isDeviceBound: isDeviceBound ?? this.isDeviceBound,
+      isLicenseExpired: isLicenseExpired ?? this.isLicenseExpired,
     );
   }
 }

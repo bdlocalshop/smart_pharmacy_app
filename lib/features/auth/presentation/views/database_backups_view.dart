@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path/path.dart' as p;
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/database/backup_manager.dart';
@@ -11,9 +10,7 @@ import '../../../../core/database/database_provider.dart';
 import '../../../../core/localization/language_controller.dart';
 import '../../../inventory/presentation/views/inventory_search_dialog.dart';
 import '../controllers/auth_controller.dart';
-
-/// Key for storing custom backup directory preference in secure storage.
-const String _kCustomBackupDirKey = 'app_custom_backup_directory';
+import '../widgets/license_restriction_dialog.dart';
 
 /// Database maintenance and rolling backup archive management screen.
 class DatabaseBackupsView extends ConsumerStatefulWidget {
@@ -24,8 +21,6 @@ class DatabaseBackupsView extends ConsumerStatefulWidget {
 }
 
 class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
-  static const FlutterSecureStorage _storage = FlutterSecureStorage();
-
   List<BackupFileInfo> _backups = [];
   String _backupDirPath = '';
   bool _isCustomFolder = false;
@@ -47,7 +42,8 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
 
       // Restore custom backup directory preference if user previously configured one
       try {
-        final savedPath = await _storage.read(key: _kCustomBackupDirKey);
+        final secureStorage = ref.read(secureStorageServiceProvider);
+        final savedPath = await secureStorage.getCustomBackupDirectory();
         if (savedPath != null && savedPath.trim().isNotEmpty) {
           final savedDir = Directory(savedPath);
           if (savedDir.existsSync()) {
@@ -99,7 +95,8 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
         chosenDir.createSync(recursive: true);
       }
 
-      await _storage.write(key: _kCustomBackupDirKey, value: selectedDirectory);
+      final secureStorage = ref.read(secureStorageServiceProvider);
+      await secureStorage.saveCustomBackupDirectory(selectedDirectory);
       manager.setCustomBackupDirectory(chosenDir);
       _isCustomFolder = true;
 
@@ -151,7 +148,8 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
     final manager = ref.read(backupManagerProvider);
 
     try {
-      await _storage.delete(key: _kCustomBackupDirKey);
+      final secureStorage = ref.read(secureStorageServiceProvider);
+      await secureStorage.clearCustomBackupDirectory();
       manager.setCustomBackupDirectory(null);
       _isCustomFolder = false;
 
@@ -186,6 +184,20 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
 
   
   Future<void> _handleUploadToCloud([File? fileToUpload]) async {
+    final session = ref.read(currentUserSessionProvider);
+    final isBound = session?.isDeviceBound ?? true;
+    if (!isBound) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: AppColors.alertCritical,
+            content: Text('Cloud upload is inactive on unbound devices. Please activate license to bind this machine.'),
+          ),
+        );
+      }
+      return;
+    }
+
     if (_isUploadingCloud) return;
 
     File? target = fileToUpload;
@@ -380,6 +392,91 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
     }
   }
 
+  Future<void> _showActivateLicenseDialog() async {
+    final keyCtl = TextEditingController();
+    final secretCtl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.key_outlined, color: AppColors.primary),
+            SizedBox(width: 10),
+            Text('Activate Cloud License'),
+          ],
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Enter the License Key and Client Secret issued from your web dashboard.',
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: keyCtl,
+                decoration: const InputDecoration(
+                  labelText: 'License Key (PHARMA-XXXX-XXXX-XXXX)',
+                  prefixIcon: Icon(Icons.vpn_key_outlined, size: 20),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: secretCtl,
+                decoration: const InputDecoration(
+                  labelText: 'HMAC Client Secret',
+                  prefixIcon: Icon(Icons.security, size: 20),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.of(ctx).pop();
+              final cloudService = ref.read(cloudLicenseServiceProvider);
+              final res = await cloudService.validateLicense(
+                licenseKey: keyCtl.text.trim(),
+                clientSecret: secretCtl.text.trim(),
+              );
+              if (mounted) {
+                if (res.success) {
+                  ref.read(authControllerProvider.notifier).updateSessionBinding(
+                    isBound: true,
+                    isLicenseExpired: false,
+                  );
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    backgroundColor: res.success ? AppColors.accent : AppColors.alertCritical,
+                    content: Text(res.message ?? (res.success ? 'License Activated & Bound!' : 'Activation Failed')),
+                  ),
+                );
+              }
+            },
+            child: const Text('Activate & Bind Device'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _handleRestoreSpecificFile(BackupFileInfo item) async {
     if (_isBackingUp || _isRestoring) return;
 
@@ -531,6 +628,9 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
   Widget build(BuildContext context) {
     final strings = ref.watch(appStringsProvider);
     final manager = ref.watch(backupManagerProvider);
+    final session = ref.watch(currentUserSessionProvider);
+    final isBound = session?.isDeviceBound ?? true;
+    final isLicenseExpired = session?.isLicenseExpired ?? false;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 32),
@@ -645,19 +745,34 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
                       ),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.primary,
-                          side: const BorderSide(color: AppColors.primary),
+                          foregroundColor: isLicenseExpired ? AppColors.textMuted : AppColors.primary,
+                          side: BorderSide(color: isLicenseExpired ? AppColors.border : AppColors.primary),
                           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                         icon: const Icon(Icons.inventory_2_outlined, size: 18),
                         label: const Text('Inventory Search'),
                         onPressed: () {
+                          if (isLicenseExpired) {
+                            showLicenseExpiredRestrictionDialog(context, strings);
+                            return;
+                          }
                           showDialog(
                             context: context,
                             builder: (ctx) => const InventorySearchDialog(),
                           );
                         },
+                      ),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.key_outlined, size: 18),
+                        label: const Text('Activate License'),
+                        onPressed: _showActivateLicenseDialog,
                       ),
                     ],
                   ),
@@ -952,9 +1067,28 @@ class _DatabaseBackupsViewState extends ConsumerState<DatabaseBackupsView> {
                                     onPressed: () => manager.openBackupDirectoryInExplorer(item.file),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.cloud_upload_outlined, size: 20, color: AppColors.primary),
-                                    tooltip: 'Upload this archive to cloud backup',
-                                    onPressed: _isUploadingCloud ? null : () => _handleUploadToCloud(item.file),
+                                    icon: Icon(
+                                      Icons.cloud_upload_outlined,
+                                      size: 20,
+                                      color: (!isBound || isLicenseExpired || _isUploadingCloud)
+                                          ? AppColors.textMuted
+                                          : AppColors.primary,
+                                    ),
+                                    tooltip: isLicenseExpired
+                                        ? strings.licenseExpiredNotice
+                                        : (!isBound
+                                            ? 'Cloud upload is inactive on unbound devices. Please activate license to bind this machine.'
+                                            : 'Upload this archive to cloud backup'),
+                                    onPressed: _isUploadingCloud
+                                        ? null
+                                        : () {
+                                            if (isLicenseExpired) {
+                                              showLicenseExpiredRestrictionDialog(context, strings);
+                                              return;
+                                            }
+                                            if (!isBound) return;
+                                            _handleUploadToCloud(item.file);
+                                          },
                                   ),
                                   IconButton(
                                     icon: const Icon(Icons.restore, size: 20, color: AppColors.alertCritical),

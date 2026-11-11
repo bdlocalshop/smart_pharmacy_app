@@ -1,5 +1,6 @@
 import '../../../../core/config/app_config.dart';
 import '../../../../core/network/cloud_license_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_pharmacy_app/core/constants/app_colors.dart';
@@ -14,6 +15,7 @@ import 'package:smart_pharmacy_app/features/auth/presentation/widgets/rbac_guard
 import 'package:smart_pharmacy_app/features/inventory/presentation/views/medicines_master_view.dart';
 import 'package:smart_pharmacy_app/features/pos/presentation/views/pos_billing_view.dart';
 import 'package:smart_pharmacy_app/features/reports/presentation/views/reports_view.dart';
+
 import 'database_backups_view.dart';
 
 /// Main Desktop App Shell with responsive sidebar and dynamic RBAC menu items.
@@ -28,8 +30,19 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   int _selectedTabIndex = 0;
 
   @override
+  void initState() {
+    super.initState();
+    final session = ref.read(currentUserSessionProvider);
+    if (session != null && !session.isDeviceBound) {
+      _selectedTabIndex = 1; // Default to Medicine Master for unbound devices
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final session = ref.watch(currentUserSessionProvider);
+    final isDeviceBound = session?.isDeviceBound ?? true;
+    final isLicenseExpired = session?.isLicenseExpired ?? false;
     final role = session?.role ?? UserRole.salesman;
     final strings = ref.watch(appStringsProvider);
 
@@ -38,9 +51,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       _NavItem(
         index: 0,
         title: strings.navPosBilling,
-        subtitle: strings.navPosSubtitle,
+        subtitle: isDeviceBound
+            ? strings.navPosSubtitle
+            : 'Inactive (Unbound Device)',
         icon: Icons.point_of_sale,
-        color: AppColors.accent,
+        color: isDeviceBound ? AppColors.accent : AppColors.textMuted,
+        isEnabled: isDeviceBound,
       ),
       _NavItem(
         index: 1,
@@ -96,7 +112,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
             width: 270,
             decoration: const BoxDecoration(
               color: AppColors.surface,
-              border: Border(right: BorderSide(color: AppColors.border, width: 1)),
+              border: Border(
+                right: BorderSide(color: AppColors.border, width: 1),
+              ),
             ),
             child: Column(
               children: [
@@ -104,7 +122,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                    border: Border(
+                      bottom: BorderSide(color: AppColors.border, width: 1),
+                    ),
                   ),
                   child: Row(
                     children: [
@@ -113,13 +133,19 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         decoration: BoxDecoration(
                           color: AppColors.primarySubtle,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                          ),
                         ),
                         child: Image.asset(
                           'assets/images/Smart-Pharmacy-logo.png',
                           height: 34,
                           errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.local_pharmacy, color: AppColors.primary, size: 30),
+                              const Icon(
+                                Icons.local_pharmacy,
+                                color: AppColors.primary,
+                                size: 30,
+                              ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -138,13 +164,21 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 2),
-                            Text(
-                              '${strings.tenantPrefix} ${session?.pharmacyUid.substring(0, 10)}...',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textMuted,
-                                fontFamily: 'monospace',
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final uid = session?.pharmacyUid ?? '';
+                                final displayUid = uid.length > 10
+                                    ? '${uid.substring(0, 10)}...'
+                                    : uid;
+                                return Text(
+                                  '${strings.tenantPrefix} $displayUid',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppColors.textMuted,
+                                    fontFamily: 'monospace',
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -156,13 +190,17 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 // Navigation Items List
                 Expanded(
                   child: ListView(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 10,
+                    ),
                     children: [
                       for (final item in menuItems)
                         _buildSidebarTile(
                           item: item,
                           isSelected: item.index == currentIndex,
-                          onTap: () => setState(() => _selectedTabIndex = item.index),
+                          onTap: () =>
+                              setState(() => _selectedTabIndex = item.index),
                         ),
                     ],
                   ),
@@ -173,7 +211,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                   padding: const EdgeInsets.all(16),
                   decoration: const BoxDecoration(
                     color: AppColors.surfaceElevated,
-                    border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+                    border: Border(
+                      top: BorderSide(color: AppColors.border, width: 1),
+                    ),
                   ),
                   child: Column(
                     children: [
@@ -181,8 +221,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         children: [
                           CircleAvatar(
                             radius: 18,
-                            backgroundColor: _getRoleColor(role).withValues(alpha: 0.2),
-                            child: Icon(Icons.person, color: _getRoleColor(role), size: 20),
+                            backgroundColor: _getRoleColor(role)
+                                .withValues(alpha: 0.2),
+                            child: Icon(
+                              Icons.person,
+                              color: _getRoleColor(role),
+                              size: 20,
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -212,13 +257,27 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.alertCritical,
-                            side: BorderSide(color: AppColors.alertCritical.withValues(alpha: 0.4)),
+                            side: BorderSide(
+                              color: AppColors.alertCritical.withValues(
+                                alpha: 0.4,
+                              ),
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
                           ),
                           icon: const Icon(Icons.logout, size: 16),
-                          label: Text(strings.signOut, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                          onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+                          label: Text(
+                            strings.signOut,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          onPressed: () => ref
+                              .read(authControllerProvider.notifier)
+                              .logout(),
                         ),
                       ),
                     ],
@@ -238,7 +297,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                   padding: const EdgeInsets.symmetric(horizontal: 24),
                   decoration: const BoxDecoration(
                     color: AppColors.surface,
-                    border: Border(bottom: BorderSide(color: AppColors.border, width: 1)),
+                    border: Border(
+                      bottom: BorderSide(color: AppColors.border, width: 1),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -249,10 +310,15 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: _getTabColor(currentIndex).withValues(alpha: 0.12),
+                                color: _getTabColor(currentIndex)
+                                    .withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Icon(_getTabIcon(currentIndex), color: _getTabColor(currentIndex), size: 20),
+                              child: Icon(
+                                _getTabIcon(currentIndex),
+                                color: _getTabColor(currentIndex),
+                                size: 20,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Flexible(
@@ -270,119 +336,220 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Language Switcher (EN <-> বাং)
-                            const LanguageToggleButton(),
-                            const SizedBox(width: 14),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Language Switcher (EN <-> বাং)
+                              const LanguageToggleButton(),
+                              const SizedBox(width: 14),
 
-                            // SQLite Offline status pill
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppColors.accent.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.circle, color: AppColors.accent, size: 8),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    strings.offlineModeWal,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: AppColors.accentDark,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            // Cloud API Status Pill
-                            InkWell(
-                              onTap: () async {
-                                final cloudService = ref.read(cloudLicenseServiceProvider);
-                                final status = await cloudService.checkStatus();
-                                if (!context.mounted) return;
-                                showDialog(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    title: const Row(
-                                      children: [
-                                        Icon(Icons.cloud_done_outlined, color: AppColors.primary),
-                                        SizedBox(width: 8),
-                                        Text('Cloud License & Server Status'),
-                                      ],
-                                    ),
-                                    content: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text('API Endpoint: ${AppConfig.apiBaseUrl}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                                        const SizedBox(height: 12),
-                                        Text('Server Connection: ${status.success ? "CONNECTED" : "OFFLINE / UNREACHABLE"}',
-                                            style: TextStyle(fontWeight: FontWeight.bold, color: status.success ? AppColors.accent : AppColors.alertCritical)),
-                                        if (status.licenseStatus != null)
-                                          Text('License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)'),
-                                        if (status.verificationStatus != null)
-                                          Text('Verification: ${status.verificationStatus!.toUpperCase()}'),
-                                      ],
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () => Navigator.of(ctx).pop(),
-                                        child: const Text('Close'),
-                                      ),
-                                      ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                                        onPressed: () async {
-                                          Navigator.of(ctx).pop();
-                                          final val = await cloudService.validateLicense();
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(content: Text(val.message ?? 'Validated')),
-                                            );
-                                          }
-                                        },
-                                        child: const Text('Validate License (HMAC)'),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                              // SQLite Offline status pill
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
                                 ),
-                                child: const Row(
+                                decoration: BoxDecoration(
+                                  color: AppColors.accent.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: AppColors.accent.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                  ),
+                                ),
+                                child: Row(
                                   children: [
-                                    Icon(Icons.cloud_queue, color: AppColors.primary, size: 14),
-                                    SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.circle,
+                                      color: AppColors.accent,
+                                      size: 8,
+                                    ),
+                                    const SizedBox(width: 6),
                                     Text(
-                                      'Cloud Sync Active',
-                                      style: TextStyle(
+                                      strings.offlineModeWal,
+                                      style: const TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
-                                        color: AppColors.primaryDark,
+                                        color: AppColors.accentDark,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 14),
-                            _buildRoleBadge(role, isDetailed: true, strings: strings),
-                          ],
+                              const SizedBox(width: 10),
+                              // Cloud API Status Pill
+                              InkWell(
+                                onTap: () async {
+                                  final cloudService = ref.read(
+                                    cloudLicenseServiceProvider,
+                                  );
+                                  final status = await cloudService
+                                      .checkStatus();
+                                  if (!context.mounted) return;
+                                  showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      title: const Row(
+                                        children: [
+                                          Icon(
+                                            Icons.cloud_done_outlined,
+                                            color: AppColors.primary,
+                                          ),
+                                          SizedBox(width: 8),
+                                          Text('Cloud License & Server Status'),
+                                        ],
+                                      ),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'API Endpoint: ${AppConfig.apiBaseUrl}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Text(
+                                            'Server Connection: ${status.success ? "CONNECTED" : "OFFLINE / UNREACHABLE"}',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: status.success
+                                                  ? AppColors.accent
+                                                  : AppColors.alertCritical,
+                                            ),
+                                          ),
+                                          if (status.licenseStatus != null)
+                                            Text(
+                                              'License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)',
+                                            ),
+                                          if (status.verificationStatus != null)
+                                            Text(
+                                              'Verification: ${status.verificationStatus!.toUpperCase()}',
+                                            ),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.of(ctx).pop(),
+                                          child: const Text('Close'),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.primary,
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          onPressed: () async {
+                                            Navigator.of(ctx).pop();
+                                            final val = await cloudService
+                                                .validateLicense();
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    val.message ?? 'Validated',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                          child: const Text(
+                                            'Validate License (HMAC)',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: isLicenseExpired
+                                        ? AppColors.alertCritical.withValues(
+                                            alpha: 0.15,
+                                          )
+                                        : (isDeviceBound
+                                              ? AppColors.primary.withValues(
+                                                  alpha: 0.1,
+                                                )
+                                              : AppColors.alertWarning
+                                                    .withValues(alpha: 0.15)),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: isLicenseExpired
+                                          ? AppColors.alertCritical.withValues(
+                                              alpha: 0.5,
+                                            )
+                                          : (isDeviceBound
+                                                ? AppColors.primary.withValues(
+                                                    alpha: 0.3,
+                                                  )
+                                                : AppColors.alertWarning
+                                                      .withValues(alpha: 0.5)),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isLicenseExpired
+                                            ? Icons.lock_clock_outlined
+                                            : (isDeviceBound
+                                                  ? Icons.cloud_queue
+                                                  : Icons.cloud_off_outlined),
+                                        color: isLicenseExpired
+                                            ? AppColors.alertCritical
+                                            : (isDeviceBound
+                                                  ? AppColors.primary
+                                                  : AppColors.alertWarning),
+                                        size: 14,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        isLicenseExpired
+                                            ? strings.licenseExpiredBadge
+                                            : (isDeviceBound
+                                                  ? 'Cloud Sync Active'
+                                                  : 'Device Unbound'),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: isLicenseExpired
+                                              ? AppColors.alertCritical
+                                              : (isDeviceBound
+                                                    ? AppColors.primaryDark
+                                                    : AppColors.alertWarning),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              _buildRoleBadge(
+                                role,
+                                isDetailed: true,
+                                strings: strings,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -414,83 +581,135 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final isDisabled = !item.isEnabled;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: onTap,
+          onTap: isDisabled
+              ? () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      backgroundColor: AppColors.alertCritical,
+                      content: Text(
+                        'POS Billing is inactive on unbound devices. Go to Backups & Restore to activate license and bind device.',
+                      ),
+                    ),
+                  );
+                }
+              : onTap,
           borderRadius: BorderRadius.circular(10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              gradient: isSelected
-                  ? LinearGradient(
-                      colors: [item.color, item.color.withValues(alpha: 0.85)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : null,
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: item.color.withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.white.withValues(alpha: 0.22)
-                        : item.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    item.icon,
-                    color: isSelected ? Colors.white : item.color,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                          fontSize: 13,
+          child: Opacity(
+            opacity: isDisabled ? 0.45 : 1.0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                gradient: (!isDisabled && isSelected)
+                    ? LinearGradient(
+                        colors: [
+                          item.color,
+                          item.color.withValues(alpha: 0.85),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                boxShadow: (!isDisabled && isSelected)
+                    ? [
+                        BoxShadow(
+                          color: item.color.withValues(alpha: 0.35),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.subtitle,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isSelected
-                              ? Colors.white.withValues(alpha: 0.85)
-                              : AppColors.textMuted,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                      ]
+                    : null,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? Colors.white.withValues(alpha: 0.22)
+                          : item.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      isDisabled ? Icons.lock_outline : item.icon,
+                      color: isSelected ? Colors.white : item.color,
+                      size: 20,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                item.title,
+                                style: TextStyle(
+                                  color: isSelected
+                                      ? Colors.white
+                                      : AppColors.textPrimary,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isDisabled) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.alertCritical.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'LOCK',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.alertCritical,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          item.subtitle,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isSelected
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : AppColors.textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -498,14 +717,21 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     );
   }
 
-  Widget _buildRoleBadge(UserRole role, {bool isDetailed = false, AppStrings? strings}) {
+  Widget _buildRoleBadge(
+    UserRole role, {
+    bool isDetailed = false,
+    AppStrings? strings,
+  }) {
     final color = _getRoleColor(role);
     final text = strings != null && isDetailed
         ? strings.roleLabel(role.code)
         : (isDetailed ? 'Role: ${role.label} (${role.code})' : role.code);
 
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isDetailed ? 10 : 8, vertical: isDetailed ? 4 : 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: isDetailed ? 10 : 8,
+        vertical: isDetailed ? 4 : 2,
+      ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
@@ -568,19 +794,85 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   }
 
   Widget _buildTabContent(int index, UserRole role) {
+    if (index == 0) {
+      final session = ref.watch(currentUserSessionProvider);
+      if (session != null && !session.isDeviceBound) {
+        return Center(
+          child: Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: AppColors.border),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.alertWarning.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.point_of_sale_outlined,
+                      size: 48,
+                      color: AppColors.alertWarning,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'POS Billing Inactive (Unbound Device)',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'This machine is running as an unbound device.\nPOS Billing is restricted until this device is activated and bound with your cloud license.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    icon: const Icon(Icons.settings_backup_restore, size: 18),
+                    label: const Text('Go to Backups & Restore'),
+                    onPressed: () {
+                      setState(() => _selectedTabIndex = 5);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      return const PosBillingView();
+    }
+
     return switch (index) {
       0 => const PosBillingView(),
       1 => const MedicinesMasterView(),
       2 => const ExpiryRadarView(),
-      3 => RbacGuard.managerAndAbove(
-          child: const ReportsView(),
-        ),
-      4 => RbacGuard.ownerOnly(
-          child: _buildStaffManagementTab(),
-        ),
-      5 => RbacGuard.ownerOnly(
-          child: _buildDatabaseTab(),
-        ),
+      3 => RbacGuard.managerAndAbove(child: const ReportsView()),
+      4 => RbacGuard.ownerOnly(child: _buildStaffManagementTab()),
+      5 => RbacGuard.ownerOnly(child: _buildDatabaseTab()),
       _ => const SizedBox.shrink(),
     };
   }
@@ -604,13 +896,25 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(strings.staffAdminTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text(
+                      strings.staffAdminTitle,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text(strings.staffAdminSubtitle, style: const TextStyle(color: AppColors.textSecondary)),
+                    Text(
+                      strings.staffAdminSubtitle,
+                      style: const TextStyle(color: AppColors.textSecondary),
+                    ),
                   ],
                 ),
                 ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                  ),
                   icon: const Icon(Icons.person_add, size: 18),
                   label: Text(strings.addStaffUserBtn),
                   onPressed: () => _showAddUserDialog(context),
@@ -629,12 +933,16 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                   final uRole = UserRole.fromCode(u.role);
                   return ListTile(
                     leading: CircleAvatar(
-                      backgroundColor: _getRoleColor(uRole).withValues(alpha: 0.15),
+                      backgroundColor: _getRoleColor(uRole)
+                          .withValues(alpha: 0.15),
                       child: Icon(Icons.person, color: _getRoleColor(uRole)),
                     ),
                     title: Row(
                       children: [
-                        Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(
+                          u.fullName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(width: 10),
                         _buildRoleBadge(uRole),
                       ],
@@ -646,23 +954,37 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.primary),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 20,
+                            color: AppColors.primary,
+                          ),
                           tooltip: 'Edit Staff User',
                           onPressed: () => _showEditUserDialog(context, u),
                         ),
                         const SizedBox(width: 8),
                         u.role == 'OWNER'
                             ? Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFFEF3C7),
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFFD97706), width: 1.2),
+                                  border: Border.all(
+                                    color: const Color(0xFFD97706),
+                                    width: 1.2,
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.verified_user, size: 14, color: Color(0xFFB45309)),
+                                    const Icon(
+                                      Icons.verified_user,
+                                      size: 14,
+                                      color: Color(0xFFB45309),
+                                    ),
                                     const SizedBox(width: 5),
                                     Text(
                                       strings.masterOwnerBadge,
@@ -715,7 +1037,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: const Row(
             children: [
               Icon(Icons.person_add, color: AppColors.primary),
@@ -739,16 +1063,28 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         decoration: BoxDecoration(
                           color: AppColors.alertCritical.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.alertCritical.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: AppColors.alertCritical.withValues(
+                              alpha: 0.3,
+                            ),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline, color: AppColors.alertCritical, size: 18),
+                            const Icon(
+                              Icons.error_outline,
+                              color: AppColors.alertCritical,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 dialogError!,
-                                style: const TextStyle(color: AppColors.alertCritical, fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: AppColors.alertCritical,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -761,9 +1097,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         labelText: 'Full Name *',
                         prefixIcon: Icon(Icons.badge_outlined, size: 20),
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Please enter full name' : null,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Please enter full name'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -773,11 +1114,16 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         prefixIcon: Icon(Icons.alternate_email, size: 20),
                         hintText: 'e.g. john or john_pos',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Please enter username';
-                        if (v.trim().length < 3) return 'Username must be at least 3 characters';
+                        if (v == null || v.trim().isEmpty)
+                          return 'Please enter username';
+                        if (v.trim().length < 3)
+                          return 'Username must be at least 3 characters';
                         return null;
                       },
                     ),
@@ -790,7 +1136,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         prefixIcon: Icon(Icons.phone_outlined, size: 20),
                         hintText: 'e.g. +880 1717-449639',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -801,15 +1150,27 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         labelText: 'Password (min 6 chars) *',
                         prefixIcon: const Icon(Icons.lock_outline, size: 20),
                         suffixIcon: IconButton(
-                          icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, size: 18),
-                          onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            size: 18,
+                          ),
+                          onPressed: () => setDialogState(
+                            () => obscurePassword = !obscurePassword,
+                          ),
                         ),
                         border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Please enter a password';
-                        if (v.length < 6) return 'Password must be at least 6 characters';
+                        if (v == null || v.isEmpty)
+                          return 'Please enter a password';
+                        if (v.length < 6)
+                          return 'Password must be at least 6 characters';
                         return null;
                       },
                     ),
@@ -820,11 +1181,20 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         labelText: 'Assigned Role',
                         prefixIcon: Icon(Icons.shield_outlined, size: 20),
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: UserRole.manager, child: Text('Store Manager')),
-                        DropdownMenuItem(value: UserRole.salesman, child: Text('POS Salesman')),
+                        DropdownMenuItem(
+                          value: UserRole.manager,
+                          child: Text('Store Manager'),
+                        ),
+                        DropdownMenuItem(
+                          value: UserRole.salesman,
+                          child: Text('POS Salesman'),
+                        ),
                       ],
                       onChanged: (r) {
                         if (r != null) setDialogState(() => selectedRole = r);
@@ -841,7 +1211,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
               onPressed: isSubmitting
                   ? null
                   : () async {
@@ -867,7 +1240,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Staff user @${userCtl.text.trim()} created successfully! They can now log in.'),
+                              content: Text(
+                                'Staff user @${userCtl.text.trim()} created successfully! They can now log in.',
+                              ),
                               backgroundColor: AppColors.primary,
                             ),
                           );
@@ -875,12 +1250,22 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       } catch (e) {
                         setDialogState(() {
                           isSubmitting = false;
-                          dialogError = e.toString().replaceFirst('AppException: ', '');
+                          dialogError = e.toString().replaceFirst(
+                            'AppException: ',
+                            '',
+                          );
                         });
                       }
                     },
               child: isSubmitting
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : const Text('Create User'),
             ),
           ],
@@ -906,7 +1291,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: [
               const Icon(Icons.manage_accounts, color: AppColors.primary),
@@ -930,16 +1317,28 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         decoration: BoxDecoration(
                           color: AppColors.alertCritical.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.alertCritical.withValues(alpha: 0.3)),
+                          border: Border.all(
+                            color: AppColors.alertCritical.withValues(
+                              alpha: 0.3,
+                            ),
+                          ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.error_outline, color: AppColors.alertCritical, size: 18),
+                            const Icon(
+                              Icons.error_outline,
+                              color: AppColors.alertCritical,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 dialogError!,
-                                style: const TextStyle(color: AppColors.alertCritical, fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                  color: AppColors.alertCritical,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
@@ -952,9 +1351,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         labelText: 'Full Name *',
                         prefixIcon: Icon(Icons.badge_outlined, size: 20),
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
-                      validator: (v) => v == null || v.trim().isEmpty ? 'Please enter full name' : null,
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Please enter full name'
+                          : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -963,11 +1367,16 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         labelText: 'Username *',
                         prefixIcon: Icon(Icons.alternate_email, size: 20),
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       validator: (v) {
-                        if (v == null || v.trim().isEmpty) return 'Please enter username';
-                        if (v.trim().length < 3) return 'Username must be at least 3 characters';
+                        if (v == null || v.trim().isEmpty)
+                          return 'Please enter username';
+                        if (v.trim().length < 3)
+                          return 'Username must be at least 3 characters';
                         return null;
                       },
                     ),
@@ -980,7 +1389,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         prefixIcon: Icon(Icons.phone_outlined, size: 20),
                         hintText: 'e.g. +880 1717-449639',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -990,14 +1402,25 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       decoration: InputDecoration(
                         labelText: 'Reset Password (optional)',
                         hintText: 'Leave blank to keep existing password',
-                        helperText: 'Enter 6+ characters only if resetting password',
+                        helperText:
+                            'Enter 6+ characters only if resetting password',
                         prefixIcon: const Icon(Icons.lock_reset, size: 20),
                         suffixIcon: IconButton(
-                          icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, size: 18),
-                          onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            size: 18,
+                          ),
+                          onPressed: () => setDialogState(
+                            () => obscurePassword = !obscurePassword,
+                          ),
                         ),
                         border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       validator: (v) {
                         if (v != null && v.isNotEmpty && v.length < 6) {
@@ -1014,11 +1437,20 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           labelText: 'Assigned Role',
                           prefixIcon: Icon(Icons.shield_outlined, size: 20),
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                         items: const [
-                          DropdownMenuItem(value: UserRole.manager, child: Text('Store Manager')),
-                          DropdownMenuItem(value: UserRole.salesman, child: Text('POS Salesman')),
+                          DropdownMenuItem(
+                            value: UserRole.manager,
+                            child: Text('Store Manager'),
+                          ),
+                          DropdownMenuItem(
+                            value: UserRole.salesman,
+                            child: Text('POS Salesman'),
+                          ),
                         ],
                         onChanged: (r) {
                           if (r != null) setDialogState(() => selectedRole = r);
@@ -1026,23 +1458,38 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       ),
                       const SizedBox(height: 12),
                       SwitchListTile(
-                        title: const Text('Account Active Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        title: const Text(
+                          'Account Active Status',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         subtitle: Text(
-                          isActive ? 'Active (User can sign in)' : 'Deactivated (Login blocked)',
+                          isActive
+                              ? 'Active (User can sign in)'
+                              : 'Deactivated (Login blocked)',
                           style: TextStyle(
                             fontSize: 12,
-                            color: isActive ? AppColors.alertSafe : AppColors.alertCritical,
+                            color: isActive
+                                ? AppColors.alertSafe
+                                : AppColors.alertCritical,
                           ),
                         ),
                         value: isActive,
                         activeThumbColor: AppColors.accent,
                         contentPadding: EdgeInsets.zero,
-                        onChanged: (val) => setDialogState(() => isActive = val),
+                        onChanged: (val) =>
+                            setDialogState(() => isActive = val),
                       ),
                     ] else ...[
                       const Text(
                         'Master Owner account role and active state cannot be modified.',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ],
                   ],
@@ -1056,7 +1503,10 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
               onPressed: isSubmitting
                   ? null
                   : () async {
@@ -1074,7 +1524,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           username: userCtl.text,
                           role: selectedRole,
                           phone: phoneCtl.text,
-                          newPassword: passCtl.text.isEmpty ? null : passCtl.text,
+                          newPassword: passCtl.text.isEmpty
+                              ? null
+                              : passCtl.text,
                           isActive: isMasterOwner ? true : isActive,
                         );
                         if (ctx.mounted) Navigator.pop(ctx);
@@ -1082,7 +1534,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Staff user @${userCtl.text.trim()} updated successfully!'),
+                              content: Text(
+                                'Staff user @${userCtl.text.trim()} updated successfully!',
+                              ),
                               backgroundColor: AppColors.primary,
                             ),
                           );
@@ -1090,12 +1544,22 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       } catch (e) {
                         setDialogState(() {
                           isSubmitting = false;
-                          dialogError = e.toString().replaceFirst('AppException: ', '');
+                          dialogError = e.toString().replaceFirst(
+                            'AppException: ',
+                            '',
+                          );
                         });
                       }
                     },
               child: isSubmitting
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
                   : const Text('Save Changes'),
             ),
           ],
@@ -1111,6 +1575,7 @@ class _NavItem {
   final String subtitle;
   final IconData icon;
   final Color color;
+  final bool isEnabled;
 
   const _NavItem({
     required this.index,
@@ -1118,5 +1583,6 @@ class _NavItem {
     required this.subtitle,
     required this.icon,
     required this.color,
+    this.isEnabled = true,
   });
 }

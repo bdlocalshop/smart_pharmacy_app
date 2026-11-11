@@ -34,6 +34,14 @@ class AppStrings {
   String get success => isBn ? 'সফল হয়েছে' : 'Success';
 
   // --- Shell & Navigation ---
+  String get licenseExpiredNotice => isBn
+      ? 'অনুগ্রহ করে আপনার লাইসেন্স যাচাইকরণের মেয়াদ আপডেট করুন'
+      : 'Please update your license validation time';
+  String get licenseExpiredNoticeTitle => isBn
+      ? 'লাইসেন্স যাচাইকরণ প্রয়োজন'
+      : 'License Validation Required';
+  String get licenseExpiredBadge => isBn ? 'লাইসেন্স মেয়াদোত্তীর্ণ' : 'License Expired';
+
   String get navPosBilling => isBn ? 'পিওএস বিলিং' : 'POS Billing';
   String get navPosSubtitle => isBn ? 'ক্যাশিয়ার চেকআউট ও চালান' : 'Cashier checkout & invoices';
   
@@ -49,7 +57,7 @@ class AppStrings {
   String get navStaffManagement => isBn ? 'কর্মী ব্যবস্থাপনা' : 'Staff Management';
   String get navStaffSubtitle => isBn ? 'কর্মী তৈরি ও পরিচালনা' : 'Create & manage staff';
   
-  String get navDatabaseBackups => isBn ? 'ডেটাবেস ও ব্যাকআপ' : 'Database & Backups';
+  String get navDatabaseBackups => isBn ? 'ব্যাকআপ ও রিস্টোর' : 'Backups & Restore';
   String get navDatabaseSubtitle => isBn ? 'রক্ষণাবেক্ষণ ও এক্সপোর্ট' : 'Maintenance & export';
   
   String get signOut => isBn ? 'সাইন আউট' : 'Sign Out';

@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'package:smart_pharmacy_app/core/constants/app_constants.dart';
 import 'package:smart_pharmacy_app/core/database/app_database.dart';
 import 'package:smart_pharmacy_app/core/errors/exceptions.dart';
+import 'package:smart_pharmacy_app/core/network/cloud_license_service.dart';
 import 'package:smart_pharmacy_app/core/services/secure_storage_service.dart';
 import 'package:smart_pharmacy_app/core/utils/password_hasher.dart';
 import '../domain/auth_repository_interface.dart';
@@ -13,11 +14,13 @@ import '../domain/user_session.dart';
 class AuthRepository implements IAuthRepository {
   final AppDatabase db;
   final SecureStorageService secureStorage;
+  final CloudLicenseService? cloudLicenseService;
   static const _uuid = Uuid();
 
   AuthRepository({
     required this.db,
     required this.secureStorage,
+    this.cloudLicenseService,
   });
 
   @override
@@ -115,6 +118,15 @@ class AuthRepository implements IAuthRepository {
           );
     });
 
+    final existingSession = await secureStorage.getLicenseValidUntil();
+    if (existingSession == null) {
+      await secureStorage.saveLicenseSession(
+        validUntil: now.add(const Duration(days: 30)),
+        daysRemaining: 30,
+        status: 'ACTIVE',
+      );
+    }
+
     final session = UserSession(
       userId: ownerId,
       username: trimmedUsername,
@@ -125,6 +137,7 @@ class AuthRepository implements IAuthRepository {
       currencySymbol: currencySymbol.trim(),
       token: _uuid.v4(),
       loginTimestamp: now,
+      isLicenseExpired: false,
     );
 
     // Save persistent desktop session
@@ -142,37 +155,203 @@ class AuthRepository implements IAuthRepository {
           ..where((tbl) => tbl.username.equals(trimmedUsername) & tbl.deletedAt.isNull()))
         .getSingleOrNull();
 
-    if (user == null) {
-      throw AppException('Invalid username or password.');
+    if (user != null) {
+      if (!user.isActive) {
+        throw AppException('This account has been deactivated. Contact the Administrator.');
+      }
+
+      final isCorrectPassword = PasswordHasher.verifyPassword(password, user.passwordHash);
+      if (!isCorrectPassword) {
+        throw AppException('Invalid username or password.');
+      }
+
+      final pharmacy = await (db.select(db.pharmacySettingsTable)
+            ..where((tbl) => tbl.pharmacyUid.equals(user.pharmacyUid)))
+          .getSingleOrNull();
+
+      final clientSecret = await secureStorage.getCloudClientSecret();
+      final isDeviceBound = clientSecret != null && clientSecret.isNotEmpty;
+
+      // 1. Check if license session is expired locally in Secure Storage
+      bool isLicenseExpired = await secureStorage.isLicenseSessionExpired();
+
+      // 2. If expired or not yet stored, call server API (/license/validate) to refresh/update session data
+      final validUntil = await secureStorage.getLicenseValidUntil();
+      if ((isLicenseExpired || validUntil == null) && cloudLicenseService != null) {
+        try {
+          final licenseKey = await secureStorage.getCloudLicenseKey();
+          if (licenseKey != null && licenseKey.isNotEmpty) {
+            if (isDeviceBound) {
+              // Bound device: call /license/validate with HMAC signature
+              final val = await cloudLicenseService!.validateLicense();
+              if (val.success) {
+                isLicenseExpired = false;
+              } else if (val.licenseStatus == 'EXPIRED') {
+                isLicenseExpired = true;
+              }
+            } else {
+              // Unbound machine: check status via /pharmacy/status
+              final statusRes = await cloudLicenseService!.checkStatus();
+              if (statusRes.success) {
+                final exp = statusRes.licenseStatus?.toUpperCase() == 'EXPIRED' ||
+                    (statusRes.daysRemaining != null && statusRes.daysRemaining! <= 0) ||
+                    (statusRes.validUntil != null && DateTime.now().isAfter(DateTime.parse(statusRes.validUntil!)));
+                isLicenseExpired = exp;
+              }
+            }
+          }
+        } catch (_) {
+          // If offline / server unreachable, retain current isLicenseExpired status
+        }
+      }
+
+      final session = UserSession(
+        userId: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        role: UserRole.fromCode(user.role),
+        pharmacyUid: user.pharmacyUid,
+        pharmacyName: pharmacy?.pharmacyName ?? 'Smart Pharmacy',
+        currencySymbol: pharmacy?.currencySymbol ?? AppConstants.defaultCurrencySymbol,
+        token: _uuid.v4(),
+        loginTimestamp: DateTime.now(),
+        isDeviceBound: isDeviceBound,
+        isLicenseExpired: isLicenseExpired,
+      );
+
+      await secureStorage.saveSession(session);
+      return session;
     }
 
-    if (!user.isActive) {
-      throw AppException('This account has been deactivated. Contact the Administrator.');
+    // If local user was not found, attempt online owner verification for new/unbound machines
+    if (cloudLicenseService != null) {
+      final verification = await cloudLicenseService!.verifyOwnerCredentials(
+        identifier: username,
+        password: password,
+      );
+
+      if (!verification.success) {
+        if (verification.isConnectionError) {
+          throw AppException(
+            'Cannot verify credentials offline on this new device. Please check your internet connection and try again.',
+          );
+        }
+        throw AppException(verification.message ?? 'Invalid username or password.');
+      }
+
+      // Online verification succeeded! Owner exists on the cloud server.
+      final pharmacyData = verification.pharmacy;
+      final ownerData = verification.owner;
+      final licenseSummary = verification.licenseSummary;
+      final isCallingDeviceBound = verification.isCallingDeviceBound;
+
+      final pharmacyUid = pharmacyData?['id']?.toString() ?? _uuid.v4();
+      final pharmacyName = pharmacyData?['pharmacy_name']?.toString() ?? 'Smart Pharmacy';
+      final tradeLicense = pharmacyData?['trade_license_number']?.toString();
+      final pharmacyPhone = pharmacyData?['pharmacy_phone']?.toString() ?? '';
+      final pharmacyAddress = pharmacyData?['pharmacy_address']?.toString() ?? '';
+      final mapLocationUrl = pharmacyData?['map_location_url']?.toString();
+
+      final ownerName = ownerData?['name']?.toString() ?? 'Owner';
+      final ownerPhone = ownerData?['phone']?.toString();
+      final now = DateTime.now();
+      final ownerId = _uuid.v4();
+      final passwordHash = PasswordHasher.hashPassword(password);
+
+      final existingSettings = await getPharmacySettings();
+
+      await db.transaction(() async {
+        // 1. Populate pharmacy settings
+        if (existingSettings == null) {
+          await db.into(db.pharmacySettingsTable).insert(
+            PharmacySettingsTableCompanion(
+              pharmacyUid: Value(pharmacyUid),
+              pharmacyName: Value(pharmacyName),
+              licenseNumber: Value(tradeLicense),
+              contactPhone: Value(pharmacyPhone),
+              address: Value(pharmacyAddress),
+              mapPinUrl: Value(mapLocationUrl),
+              currencySymbol: const Value(AppConstants.defaultCurrencySymbol),
+              createdAt: Value(now),
+              updatedAt: Value(now),
+            ),
+          );
+        } else {
+          await (db.update(db.pharmacySettingsTable)
+                ..where((tbl) => tbl.pharmacyUid.equals(existingSettings.pharmacyUid)))
+              .write(
+            PharmacySettingsTableCompanion(
+              pharmacyName: Value(pharmacyName),
+              licenseNumber: Value(tradeLicense),
+              contactPhone: Value(pharmacyPhone),
+              address: Value(pharmacyAddress),
+              mapPinUrl: Value(mapLocationUrl),
+              updatedAt: Value(now),
+            ),
+          );
+        }
+
+        // 2. Populate owner user
+        await db.into(db.usersTable).insert(
+          UsersTableCompanion(
+            id: Value(ownerId),
+            pharmacyUid: Value(pharmacyUid),
+            fullName: Value(ownerName),
+            phone: Value(ownerPhone),
+            username: Value(trimmedUsername),
+            passwordHash: Value(passwordHash),
+            role: const Value(AppConstants.roleOwner),
+            isActive: const Value(true),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+            syncStatus: const Value(AppConstants.syncSynced),
+          ),
+        );
+      });
+
+      // Set cloud license key in secure storage if present, but DO NOT save client secret (unbound machine)
+      final licenseKey = licenseSummary?['license_key']?.toString();
+      final status = licenseSummary?['status']?.toString();
+      final daysRemaining = licenseSummary?['session_days_remaining'] as int?;
+      final validUntilStr = licenseSummary?['valid_until']?.toString();
+      final validUntil = validUntilStr != null ? DateTime.tryParse(validUntilStr) : null;
+
+      final isLicenseExpired = (status?.toUpperCase() == 'EXPIRED') ||
+          (daysRemaining != null && daysRemaining <= 0) ||
+          (validUntil != null && DateTime.now().isAfter(validUntil));
+
+      if (licenseKey != null && licenseKey.isNotEmpty) {
+        await secureStorage.saveCloudCredentials(
+          licenseKey: licenseKey,
+          pharmacyId: pharmacyUid,
+        );
+      }
+
+      await secureStorage.saveLicenseSession(
+        validUntil: validUntil,
+        daysRemaining: daysRemaining,
+        status: status,
+      );
+
+      final session = UserSession(
+        userId: ownerId,
+        username: trimmedUsername,
+        fullName: ownerName,
+        role: UserRole.owner,
+        pharmacyUid: pharmacyUid,
+        pharmacyName: pharmacyName,
+        currencySymbol: AppConstants.defaultCurrencySymbol,
+        token: _uuid.v4(),
+        loginTimestamp: now,
+        isDeviceBound: isCallingDeviceBound, // FALSE for unbound machine
+        isLicenseExpired: isLicenseExpired,
+      );
+
+      await secureStorage.saveSession(session);
+      return session;
     }
 
-    final isCorrectPassword = PasswordHasher.verifyPassword(password, user.passwordHash);
-    if (!isCorrectPassword) {
-      throw AppException('Invalid username or password.');
-    }
-
-    final pharmacy = await (db.select(db.pharmacySettingsTable)
-          ..where((tbl) => tbl.pharmacyUid.equals(user.pharmacyUid)))
-        .getSingleOrNull();
-
-    final session = UserSession(
-      userId: user.id,
-      username: user.username,
-      fullName: user.fullName,
-      role: UserRole.fromCode(user.role),
-      pharmacyUid: user.pharmacyUid,
-      pharmacyName: pharmacy?.pharmacyName ?? 'Smart Pharmacy',
-      currencySymbol: pharmacy?.currencySymbol ?? AppConstants.defaultCurrencySymbol,
-      token: _uuid.v4(),
-      loginTimestamp: DateTime.now(),
-    );
-
-    await secureStorage.saveSession(session);
-    return session;
+    throw AppException('Invalid username or password.');
   }
 
   @override
@@ -195,11 +374,17 @@ class AuthRepository implements IAuthRepository {
           ..where((tbl) => tbl.pharmacyUid.equals(user.pharmacyUid)))
         .getSingleOrNull();
 
+    final clientSecret = await secureStorage.getCloudClientSecret();
+    final isDeviceBound = (clientSecret != null && clientSecret.isNotEmpty);
+    final isLicenseExpired = await secureStorage.isLicenseSessionExpired();
+
     return cachedSession.copyWith(
       fullName: user.fullName,
       role: UserRole.fromCode(user.role),
       pharmacyName: pharmacy?.pharmacyName ?? cachedSession.pharmacyName,
       currencySymbol: pharmacy?.currencySymbol ?? cachedSession.currencySymbol,
+      isDeviceBound: isDeviceBound,
+      isLicenseExpired: isLicenseExpired,
     );
   }
 

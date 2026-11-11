@@ -95,6 +95,28 @@ class CloudBackupResult {
   });
 }
 
+class OwnerVerificationResult {
+  final bool success;
+  final bool isCallingDeviceBound;
+  final Map<String, dynamic>? pharmacy;
+  final Map<String, dynamic>? owner;
+  final Map<String, dynamic>? licenseSummary;
+  final Map<String, dynamic>? hardwareLock;
+  final String? message;
+  final bool isConnectionError;
+
+  const OwnerVerificationResult({
+    required this.success,
+    this.isCallingDeviceBound = false,
+    this.pharmacy,
+    this.owner,
+    this.licenseSummary,
+    this.hardwareLock,
+    this.message,
+    this.isConnectionError = false,
+  });
+}
+
 /// Service managing cloud license activation, status checks, and backup archiving.
 class CloudLicenseService {
   final ApiClient apiClient;
@@ -157,6 +179,12 @@ class CloudLicenseService {
           licenseKey: licenseKey,
           clientSecret: clientSecret,
           pharmacyId: pharmacyId,
+        );
+        final validUntilStr = creds?['valid_until'] as String?;
+        await secureStorage.saveLicenseSession(
+          validUntil: validUntilStr != null ? DateTime.tryParse(validUntilStr) : null,
+          daysRemaining: 30,
+          status: 'ACTIVE',
         );
       }
 
@@ -260,6 +288,9 @@ class CloudLicenseService {
 
       final data = res['data'] as Map<String, dynamic>?;
       final sessionToken = data?['session_token'] as String?;
+      final licenseStatus = data?['license_status'] as String? ?? 'ACTIVE';
+      final sessionDaysRemaining = data?['session_days_remaining'] as int?;
+      final validUntilStr = data?['valid_until'] as String?;
 
       if (sessionToken != null) {
         await secureStorage.saveCloudCredentials(
@@ -269,19 +300,34 @@ class CloudLicenseService {
         );
       }
 
+      await secureStorage.saveLicenseSession(
+        validUntil: validUntilStr != null ? DateTime.tryParse(validUntilStr) : null,
+        daysRemaining: sessionDaysRemaining,
+        status: licenseStatus,
+      );
+
       return CloudValidationResult(
         success: true,
         pharmacyName: data?['pharmacy_name'] as String?,
-        licenseStatus: data?['license_status'] as String? ?? 'ACTIVE',
-        sessionDaysRemaining: data?['session_days_remaining'] as int?,
-        validUntil: data?['valid_until'] as String?,
+        licenseStatus: licenseStatus,
+        sessionDaysRemaining: sessionDaysRemaining,
+        validUntil: validUntilStr,
         sessionToken: sessionToken,
         message: 'License validated successfully.',
       );
     } catch (e) {
+      final msg = e.toString().replaceFirst('AppException: ', '');
+      final isExpired = msg.toLowerCase().contains('expired');
+      if (isExpired) {
+        await secureStorage.saveLicenseSession(
+          daysRemaining: 0,
+          status: 'EXPIRED',
+        );
+      }
       return CloudValidationResult(
         success: false,
-        message: e.toString().replaceFirst('AppException: ', ''),
+        licenseStatus: isExpired ? 'EXPIRED' : null,
+        message: msg,
       );
     }
   }
@@ -302,6 +348,17 @@ class CloudLicenseService {
 
       final data = res['data'] as Map<String, dynamic>?;
       final license = data?['license'] as Map<String, dynamic>?;
+
+      if (license != null) {
+        final status = license['status'] as String?;
+        final days = license['days_remaining'] as int?;
+        final validStr = license['valid_until'] as String?;
+        await secureStorage.saveLicenseSession(
+          validUntil: validStr != null ? DateTime.tryParse(validStr) : null,
+          daysRemaining: days,
+          status: status,
+        );
+      }
 
       return CloudStatusResult(
         success: true,
@@ -388,6 +445,60 @@ class CloudLicenseService {
       return CloudBackupResult(success: false, message: msg);
     } catch (e) {
       return CloudBackupResult(success: false, message: 'Upload error: $e');
+    }
+  }
+
+  /// Verifies Owner credentials from an unbound machine (new machine).
+  /// Calls POST /pharmacy/verify-credentials as specified in documentation.
+  Future<OwnerVerificationResult> verifyOwnerCredentials({
+    required String identifier,
+    required String password,
+  }) async {
+    try {
+      final deviceUuid = await deviceInfo.getDeviceUuid();
+      final res = await apiClient.post(
+        '/pharmacy/verify-credentials',
+        body: {
+          'identifier': identifier.trim(),
+          'password': password,
+          'device_uuid': deviceUuid,
+        },
+      );
+
+      final data = res['data'] as Map<String, dynamic>?;
+      final hwLock = data?['hardware_lock'] as Map<String, dynamic>?;
+      final isBound = hwLock?['is_calling_device_bound'] == true;
+      final licenseSummary = data?['license_summary'] as Map<String, dynamic>?;
+
+      if (licenseSummary != null) {
+        final status = licenseSummary['status']?.toString();
+        final days = licenseSummary['session_days_remaining'] as int?;
+        final validStr = licenseSummary['valid_until']?.toString();
+        await secureStorage.saveLicenseSession(
+          validUntil: validStr != null ? DateTime.tryParse(validStr) : null,
+          daysRemaining: days,
+          status: status,
+        );
+      }
+
+      return OwnerVerificationResult(
+        success: true,
+        isCallingDeviceBound: isBound,
+        pharmacy: data?['pharmacy'] as Map<String, dynamic>?,
+        owner: data?['owner'] as Map<String, dynamic>?,
+        licenseSummary: licenseSummary,
+        hardwareLock: hwLock,
+        message: res['message']?.toString() ?? 'Owner credentials verified successfully.',
+      );
+    } catch (e) {
+      final isConn = isConnectionError(e);
+      return OwnerVerificationResult(
+        success: false,
+        isConnectionError: isConn,
+        message: isConn
+            ? 'Unable to reach the verification server. Please check your internet connection and try again.'
+            : sanitizeErrorMessage(e.toString()),
+      );
     }
   }
 }

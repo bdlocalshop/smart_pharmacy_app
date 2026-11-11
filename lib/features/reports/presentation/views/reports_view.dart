@@ -12,6 +12,8 @@ import 'package:smart_pharmacy_app/features/reports/presentation/widgets/custom_
 import 'package:smart_pharmacy_app/features/reports/presentation/widgets/invoice_items_dialog.dart';
 import 'package:smart_pharmacy_app/features/reports/presentation/widgets/receipt_preview_dialog.dart';
 
+import 'package:smart_pharmacy_app/features/auth/presentation/widgets/license_restriction_dialog.dart';
+
 /// Sales Volume & Performance Reports Screen.
 class ReportsView extends ConsumerWidget {
   const ReportsView({super.key});
@@ -24,7 +26,15 @@ class ReportsView extends ConsumerWidget {
     final selectedPayment = ref.watch(reportsPaymentFilterProvider);
     final session = ref.watch(currentUserSessionProvider);
     final role = session?.role ?? UserRole.manager;
+    final isLicenseExpired = session?.isLicenseExpired ?? false;
     final strings = ref.watch(appStringsProvider);
+
+    // If license is expired, guarantee reports default strictly to Today
+    if (isLicenseExpired && activeFilter != DatePeriodFilter.today) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        controller.setPeriodFilter(DatePeriodFilter.today);
+      });
+    }
 
     final currency = state.pharmacy?.currencySymbol ?? '৳';
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
@@ -46,11 +56,18 @@ class ReportsView extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.calendar_month, color: AppColors.primary, size: 20),
+                  const Icon(
+                    Icons.calendar_month,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     strings.periodLabel,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(width: 12),
 
@@ -65,7 +82,9 @@ class ReportsView extends ConsumerWidget {
                             filter: DatePeriodFilter.today,
                             activeFilter: activeFilter,
                             displayLabel: strings.periodToday,
-                            onSelect: () => controller.setPeriodFilter(DatePeriodFilter.today),
+                            onSelect: () => controller.setPeriodFilter(
+                              DatePeriodFilter.today,
+                            ),
                           ),
                           const SizedBox(width: 8),
                           _buildPeriodChip(
@@ -73,7 +92,18 @@ class ReportsView extends ConsumerWidget {
                             filter: DatePeriodFilter.yesterday,
                             activeFilter: activeFilter,
                             displayLabel: strings.periodYesterday,
-                            onSelect: () => controller.setPeriodFilter(DatePeriodFilter.yesterday),
+                            onSelect: () {
+                              if (isLicenseExpired) {
+                                showLicenseExpiredRestrictionDialog(
+                                  context,
+                                  strings,
+                                );
+                                return;
+                              }
+                              controller.setPeriodFilter(
+                                DatePeriodFilter.yesterday,
+                              );
+                            },
                           ),
                           const SizedBox(width: 8),
                           _buildPeriodChip(
@@ -81,7 +111,18 @@ class ReportsView extends ConsumerWidget {
                             filter: DatePeriodFilter.thisWeek,
                             activeFilter: activeFilter,
                             displayLabel: strings.periodThisWeek,
-                            onSelect: () => controller.setPeriodFilter(DatePeriodFilter.thisWeek),
+                            onSelect: () {
+                              if (isLicenseExpired) {
+                                showLicenseExpiredRestrictionDialog(
+                                  context,
+                                  strings,
+                                );
+                                return;
+                              }
+                              controller.setPeriodFilter(
+                                DatePeriodFilter.thisWeek,
+                              );
+                            },
                           ),
                           const SizedBox(width: 8),
                           _buildPeriodChip(
@@ -89,7 +130,18 @@ class ReportsView extends ConsumerWidget {
                             filter: DatePeriodFilter.thisMonth,
                             activeFilter: activeFilter,
                             displayLabel: strings.periodThisMonth,
-                            onSelect: () => controller.setPeriodFilter(DatePeriodFilter.thisMonth),
+                            onSelect: () {
+                              if (isLicenseExpired) {
+                                showLicenseExpiredRestrictionDialog(
+                                  context,
+                                  strings,
+                                );
+                                return;
+                              }
+                              controller.setPeriodFilter(
+                                DatePeriodFilter.thisMonth,
+                              );
+                            },
                           ),
                           const SizedBox(width: 8),
                           ActionChip(
@@ -107,14 +159,16 @@ class ReportsView extends ConsumerWidget {
                             ),
                             labelStyle: TextStyle(
                               fontSize: 12,
-                              fontWeight: activeFilter == DatePeriodFilter.custom
+                              fontWeight:
+                                  activeFilter == DatePeriodFilter.custom
                                   ? FontWeight.bold
                                   : FontWeight.w600,
                               color: activeFilter == DatePeriodFilter.custom
                                   ? AppColors.primaryDark
                                   : const Color(0xFF0F172A),
                             ),
-                            backgroundColor: activeFilter == DatePeriodFilter.custom
+                            backgroundColor:
+                                activeFilter == DatePeriodFilter.custom
                                 ? AppColors.primary.withValues(alpha: 0.15)
                                 : Colors.white,
                             side: BorderSide(
@@ -124,10 +178,18 @@ class ReportsView extends ConsumerWidget {
                               width: 1.2,
                             ),
                             onPressed: () async {
+                              if (isLicenseExpired) {
+                                showLicenseExpiredRestrictionDialog(
+                                  context,
+                                  strings,
+                                );
+                                return;
+                              }
                               final range = await showDialog<DateTimeRange>(
                                 context: context,
-                                builder: (ctx) =>
-                                    CustomRangePickerDialog(initialRange: state.activeRange),
+                                builder: (ctx) => CustomRangePickerDialog(
+                                  initialRange: state.activeRange,
+                                ),
                               );
                               if (range != null) {
                                 controller.setCustomRange(range);
@@ -143,7 +205,11 @@ class ReportsView extends ConsumerWidget {
 
                   // Dual Exporters
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.table_chart, size: 16, color: Colors.green),
+                    icon: const Icon(
+                      Icons.table_chart,
+                      size: 16,
+                      color: Colors.green,
+                    ),
                     label: Text(strings.exportExcel),
                     onPressed: state.isLoading || state.allSales.isEmpty
                         ? null
@@ -152,7 +218,9 @@ class ReportsView extends ConsumerWidget {
                             if (context.mounted && file != null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Excel workbook exported: ${file.path}'),
+                                  content: Text(
+                                    'Excel workbook exported: ${file.path}',
+                                  ),
                                   backgroundColor: AppColors.primaryDark,
                                 ),
                               );
@@ -161,7 +229,11 @@ class ReportsView extends ConsumerWidget {
                   ),
                   const SizedBox(width: 8),
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.description_outlined, size: 16, color: Colors.blueGrey),
+                    icon: const Icon(
+                      Icons.description_outlined,
+                      size: 16,
+                      color: Colors.blueGrey,
+                    ),
                     label: Text(strings.exportAuditLog),
                     onPressed: state.isLoading || state.allSales.isEmpty
                         ? null
@@ -170,7 +242,9 @@ class ReportsView extends ConsumerWidget {
                             if (context.mounted && file != null) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Text audit log exported: ${file.path}'),
+                                  content: Text(
+                                    'Text audit log exported: ${file.path}',
+                                  ),
                                   backgroundColor: AppColors.primaryDark,
                                 ),
                               );
@@ -188,7 +262,10 @@ class ReportsView extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 'Active Window: ${dateFormat.format(state.activeRange.start)} to ${dateFormat.format(state.activeRange.end)}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
               ),
             ],
           ),
@@ -224,7 +301,8 @@ class ReportsView extends ConsumerWidget {
               child: _buildKpiCard(
                 title: strings.kpiGrossRevenue,
                 value: '$currency${state.kpis.grossRevenue.toStringAsFixed(2)}',
-                subtitle: 'Discounts: -$currency${state.kpis.totalDiscounts.toStringAsFixed(2)}',
+                subtitle:
+                    'Discounts: -$currency${state.kpis.totalDiscounts.toStringAsFixed(2)}',
                 icon: Icons.payments_outlined,
                 iconColor: AppColors.primary,
               ),
@@ -255,11 +333,18 @@ class ReportsView extends ConsumerWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.account_balance_wallet_outlined, size: 18, color: AppColors.textMuted),
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                size: 18,
+                color: AppColors.textMuted,
+              ),
               const SizedBox(width: 8),
               Text(
                 strings.paymentChannels,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(width: 16),
               ...['Cash', 'Card', 'Mobile', 'Due'].map((method) {
@@ -280,11 +365,17 @@ class ReportsView extends ConsumerWidget {
                       const SizedBox(width: 6),
                       Text(
                         '$method: ',
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
                       ),
                       Text(
                         '$currency${amt.toStringAsFixed(2)} ($count)',
-                        style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ],
                   ),
@@ -317,8 +408,12 @@ class ReportsView extends ConsumerWidget {
                             isDense: true,
                             hintText: strings.searchInvoicesHint,
                             prefixIcon: const Icon(Icons.search, size: 18),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 10,
+                            ),
                           ),
                           onChanged: controller.setSearchQuery,
                         ),
@@ -327,8 +422,13 @@ class ReportsView extends ConsumerWidget {
                       DropdownButton<String>(
                         value: selectedPayment,
                         underline: const SizedBox.shrink(),
-                        items: ['All', 'Cash', 'Card', 'Mobile', 'Due'].map((p) {
-                          return DropdownMenuItem(value: p, child: Text('Payment: $p'));
+                        items: ['All', 'Cash', 'Card', 'Mobile', 'Due'].map((
+                          p,
+                        ) {
+                          return DropdownMenuItem(
+                            value: p,
+                            child: Text('Payment: $p'),
+                          );
                         }).toList(),
                         onChanged: (val) {
                           if (val != null) controller.setPaymentFilter(val);
@@ -344,164 +444,208 @@ class ReportsView extends ConsumerWidget {
                   child: state.isLoading
                       ? const Center(child: CircularProgressIndicator())
                       : state.filteredSales.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.query_stats, size: 48, color: Colors.grey.shade400),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    strings.noSalesInvoices,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textMuted,
-                                    ),
-                                  ),
-                                ],
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.query_stats,
+                                size: 48,
+                                color: Colors.grey.shade400,
                               ),
-                            )
-                          : Scrollbar(
-                              thumbVisibility: true,
-                              child: SingleChildScrollView(
-                                child: SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: DataTable(
-                                  horizontalMargin: 16,
-                                  columnSpacing: 16,
-                                  columns: [
-                                    DataColumn(label: Text(strings.colInvoiceNo)),
-                                    DataColumn(label: Text(strings.colActions)),
-                                    DataColumn(label: Text(strings.colDateTime)),
-                                    DataColumn(label: Text(strings.colCustomer)),
-                                    DataColumn(label: Text(strings.colCashier)),
-                                    DataColumn(label: Text(strings.colMethod)),
-                                    DataColumn(numeric: true, label: Text(strings.colUnits)),
-                                    DataColumn(numeric: true, label: Text(strings.colTotalPayable)),
-                                    if (role.canViewProfits) ...[
-                                      DataColumn(numeric: true, label: Text(strings.colBatchCost)),
-                                      DataColumn(numeric: true, label: Text(strings.colRealProfit)),
-                                      DataColumn(numeric: true, label: Text(strings.colMargin)),
-                                    ],
-                                  ],
-                                  rows: state.filteredSales.map((report) {
-                                    final s = report.sale;
-                                    return DataRow(
-                                      cells: [
-                                        DataCell(
-                                          Text(
-                                            s.invoiceNumber,
-                                            style: const TextStyle(
-                                              fontFamily: 'Courier',
-                                              fontWeight: FontWeight.bold,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                        ),
-                                        DataCell(
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.visibility_outlined,
-                                                  size: 18,
-                                                  color: AppColors.primary,
-                                                ),
-                                                tooltip: 'View Line Items',
-                                                onPressed: () {
-                                                  showDialog(
-                                                    context: context,
-                                                    builder: (ctx) => InvoiceItemsDialog(
-                                                      report: report,
-                                                      currencySymbol: currency,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.receipt_outlined,
-                                                  size: 18,
-                                                  color: AppColors.primaryDark,
-                                                ),
-                                                tooltip: 'Thermal Slip (80mm/58mm)',
-                                                onPressed: () {
-                                                  final receiptData = _toReceiptData(
-                                                    report: report,
-                                                    pharmacy: state.pharmacy,
-                                                  );
-                                                  showDialog(
-                                                    context: context,
-                                                    builder: (ctx) => ReceiptPreviewDialog(
-                                                      receiptData: receiptData,
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        DataCell(Text(dateFormat.format(s.createdAt))),
-                                        DataCell(
-                                          Text(
-                                            s.customerName.isEmpty
-                                                ? 'Walk-in Customer'
-                                                : s.customerName,
-                                            style: const TextStyle(fontSize: 12),
-                                          ),
-                                        ),
-                                        DataCell(
-                                          Text(report.cashierName, style: const TextStyle(fontSize: 12)),
-                                        ),
-                                        DataCell(
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 3,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: _getPaymentColor(s.paymentMethod).withValues(alpha: 0.12),
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              s.paymentMethod,
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.bold,
-                                                color: _getPaymentColor(s.paymentMethod),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        DataCell(Text('${report.totalUnits}')),
-                                        DataCell(
-                                          Text(
-                                            '$currency${s.totalPayable.toStringAsFixed(2)}',
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
-                                          ),
-                                        ),
-                                        if (role.canViewProfits) ...[
-                                          DataCell(Text('$currency${s.totalCostPrice.toStringAsFixed(2)}')),
-                                          DataCell(
-                                            Text(
-                                              '$currency${s.grossProfit.toStringAsFixed(2)}',
-                                              style: const TextStyle(
-                                                color: AppColors.accent,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            Text('${report.profitMargin.toStringAsFixed(1)}%'),
-                                          ),
-                                        ],
-                                      ],
-                                    );
-                                  }).toList(),
+                              const SizedBox(height: 12),
+                              Text(
+                                strings.noSalesInvoices,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textMuted,
                                 ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : Scrollbar(
+                          thumbVisibility: true,
+                          child: SingleChildScrollView(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                horizontalMargin: 16,
+                                columnSpacing: 16,
+                                columns: [
+                                  DataColumn(label: Text(strings.colInvoiceNo)),
+                                  DataColumn(label: Text(strings.colActions)),
+                                  DataColumn(label: Text(strings.colDateTime)),
+                                  DataColumn(label: Text(strings.colCustomer)),
+                                  DataColumn(label: Text(strings.colCashier)),
+                                  DataColumn(label: Text(strings.colMethod)),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(strings.colUnits),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(strings.colTotalPayable),
+                                  ),
+                                  if (role.canViewProfits) ...[
+                                    DataColumn(
+                                      numeric: true,
+                                      label: Text(strings.colBatchCost),
+                                    ),
+                                    DataColumn(
+                                      numeric: true,
+                                      label: Text(strings.colRealProfit),
+                                    ),
+                                    DataColumn(
+                                      numeric: true,
+                                      label: Text(strings.colMargin),
+                                    ),
+                                  ],
+                                ],
+                                rows: state.filteredSales.map((report) {
+                                  final s = report.sale;
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          s.invoiceNumber,
+                                          style: const TextStyle(
+                                            fontFamily: 'Courier',
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.visibility_outlined,
+                                                size: 18,
+                                                color: AppColors.primary,
+                                              ),
+                                              tooltip: 'View Line Items',
+                                              onPressed: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) =>
+                                                      InvoiceItemsDialog(
+                                                        report: report,
+                                                        currencySymbol:
+                                                            currency,
+                                                      ),
+                                                );
+                                              },
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.receipt_outlined,
+                                                size: 18,
+                                                color: AppColors.primaryDark,
+                                              ),
+                                              tooltip:
+                                                  'Thermal Slip (80mm/58mm)',
+                                              onPressed: () {
+                                                final receiptData =
+                                                    _toReceiptData(
+                                                      report: report,
+                                                      pharmacy: state.pharmacy,
+                                                    );
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (ctx) =>
+                                                      ReceiptPreviewDialog(
+                                                        receiptData:
+                                                            receiptData,
+                                                      ),
+                                                );
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(dateFormat.format(s.createdAt)),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          s.customerName.isEmpty
+                                              ? 'Walk-in Customer'
+                                              : s.customerName,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          report.cashierName,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 3,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: _getPaymentColor(
+                                              s.paymentMethod,
+                                            ).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            s.paymentMethod,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: _getPaymentColor(
+                                                s.paymentMethod,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(Text('${report.totalUnits}')),
+                                      DataCell(
+                                        Text(
+                                          '$currency${s.totalPayable.toStringAsFixed(2)}',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      if (role.canViewProfits) ...[
+                                        DataCell(
+                                          Text(
+                                            '$currency${s.totalCostPrice.toStringAsFixed(2)}',
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Text(
+                                            '$currency${s.grossProfit.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                              color: AppColors.accent,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                        DataCell(
+                                          Text(
+                                            '${report.profitMargin.toStringAsFixed(1)}%',
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  );
+                                }).toList(),
                               ),
                             ),
                           ),
+                        ),
                 ),
               ],
             ),
@@ -550,7 +694,9 @@ class ReportsView extends ConsumerWidget {
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: highlight ? AppColors.accent.withValues(alpha: 0.6) : AppColors.border,
+          color: highlight
+              ? AppColors.accent.withValues(alpha: 0.6)
+              : AppColors.border,
           width: highlight ? 1.5 : 1,
         ),
       ),
@@ -571,7 +717,10 @@ class ReportsView extends ConsumerWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -579,13 +728,18 @@ class ReportsView extends ConsumerWidget {
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: highlight ? AppColors.primaryDark : AppColors.textPrimary,
+                    color: highlight
+                        ? AppColors.primaryDark
+                        : AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -619,7 +773,9 @@ class ReportsView extends ConsumerWidget {
       invoiceNumber: s.invoiceNumber,
       date: s.createdAt,
       cashierName: report.cashierName,
-      customerName: s.customerName.isEmpty ? 'Walk-in Customer' : s.customerName,
+      customerName: s.customerName.isEmpty
+          ? 'Walk-in Customer'
+          : s.customerName,
       customerPhone: s.customerPhone,
       items: report.items.map((item) {
         return ReceiptLineItem(

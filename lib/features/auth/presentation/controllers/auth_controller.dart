@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:smart_pharmacy_app/core/database/app_database.dart';
 import 'package:smart_pharmacy_app/core/database/database_provider.dart';
+import 'package:smart_pharmacy_app/core/network/cloud_license_service.dart';
 import 'package:smart_pharmacy_app/core/services/secure_storage_service.dart';
 import '../../data/auth_repository.dart';
 import '../../domain/auth_repository_interface.dart';
@@ -16,7 +17,12 @@ final secureStorageServiceProvider = Provider<SecureStorageService>((ref) {
 final authRepositoryProvider = Provider<IAuthRepository>((ref) {
   final db = ref.watch(databaseProvider);
   final secureStorage = ref.watch(secureStorageServiceProvider);
-  return AuthRepository(db: db, secureStorage: secureStorage);
+  final cloudLicenseService = ref.watch(cloudLicenseServiceProvider);
+  return AuthRepository(
+    db: db,
+    secureStorage: secureStorage,
+    cloudLicenseService: cloudLicenseService,
+  );
 });
 
 enum AuthStatus {
@@ -224,6 +230,29 @@ class AuthController extends Notifier<AuthState> {
   /// Navigates to the initial setup / onboarding screen.
   void goToSetup() {
     state = state.copyWith(status: AuthStatus.setupRequired, clearError: true);
+  }
+
+  /// Updates current session device binding and license expiration state in-memory and persistent storage.
+  void updateSessionBinding({bool? isBound, bool? isLicenseExpired}) {
+    if (state.session != null) {
+      final updated = state.session!.copyWith(
+        isDeviceBound: isBound ?? state.session!.isDeviceBound,
+        isLicenseExpired: isLicenseExpired ?? state.session!.isLicenseExpired,
+      );
+      state = state.copyWith(session: updated);
+      ref.read(secureStorageServiceProvider).saveSession(updated);
+    }
+  }
+
+  /// Refreshes license expiration status from SecureStorage.
+  Future<void> refreshLicenseSession() async {
+    final secureStorage = ref.read(secureStorageServiceProvider);
+    final isExpired = await secureStorage.isLicenseSessionExpired();
+    if (state.session != null && state.session!.isLicenseExpired != isExpired) {
+      final updated = state.session!.copyWith(isLicenseExpired: isExpired);
+      state = state.copyWith(session: updated);
+      await secureStorage.saveSession(updated);
+    }
   }
 }
 

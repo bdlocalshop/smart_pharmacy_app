@@ -1,4 +1,5 @@
 import '../../../../core/network/cloud_license_service.dart';
+import '../../../../core/config/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -42,7 +43,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('API Server: ', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+            Text('API Server: ${AppConfig.apiBaseUrl}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -53,14 +54,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Server Connection: ',
+                  Text('Server Connection: ${status.success ? "CONNECTED" : "OFFLINE / UNREACHABLE"}',
                       style: TextStyle(fontWeight: FontWeight.bold, color: status.success ? AppColors.accent : AppColors.alertCritical)),
                   if (status.verificationStatus != null)
-                    Text('Verification: '),
+                    Text('Verification: ${status.verificationStatus!.toUpperCase()}'),
                   if (status.licenseStatus != null)
-                    Text('License:  ( days remaining)'),
+                    Text('License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)'),
                   if (!status.success && status.message != null)
-                    Text('Notice: ', style: const TextStyle(fontSize: 12)),
+                    Text('Notice: ${status.message!}', style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),
@@ -86,85 +87,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               }
             },
             child: const Text('Re-validate License'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showActivateLicenseDialog() async {
-    final keyCtl = TextEditingController();
-    final secretCtl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.key_outlined, color: AppColors.primary),
-            SizedBox(width: 10),
-            Text('Activate Cloud License'),
-          ],
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Enter the License Key and Client Secret issued from your web dashboard.',
-                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 14),
-              TextFormField(
-                controller: keyCtl,
-                decoration: const InputDecoration(
-                  labelText: 'License Key (PHARMA-XXXX-XXXX-XXXX)',
-                  prefixIcon: Icon(Icons.vpn_key_outlined, size: 20),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: secretCtl,
-                decoration: const InputDecoration(
-                  labelText: 'HMAC Client Secret',
-                  prefixIcon: Icon(Icons.security, size: 20),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              Navigator.of(ctx).pop();
-              final cloudService = ref.read(cloudLicenseServiceProvider);
-              final res = await cloudService.validateLicense(
-                licenseKey: keyCtl.text.trim(),
-                clientSecret: secretCtl.text.trim(),
-              );
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: res.success ? AppColors.accent : AppColors.alertCritical,
-                    content: Text(res.message ?? (res.success ? 'License Activated & Bound!' : 'Activation Failed')),
-                  ),
-                );
-              }
-            },
-            child: const Text('Activate & Bind Device'),
           ),
         ],
       ),
@@ -491,33 +413,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         minimumSize: Size.zero,
                                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                       ),
-                                      icon: const Icon(Icons.key_outlined, size: 15),
+                                      icon: const Icon(Icons.app_registration_outlined, size: 15),
                                       label: const Text(
-                                        'Activate License',
+                                        'Initial Setup',
                                         style: TextStyle(fontSize: 11.5),
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                      onPressed: _showActivateLicenseDialog,
+                                      onPressed: () {
+                                        ref.read(authControllerProvider.notifier).goToSetup();
+                                      },
                                     ),
                                   ),
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 8),
-                            Center(
-                              child: TextButton.icon(
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.textSecondary,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                icon: const Icon(Icons.app_registration_outlined, size: 16),
-                                label: const Text('Initial Setup', style: TextStyle(fontSize: 12)),
-                                onPressed: () {
-                                  ref.read(authControllerProvider.notifier).goToSetup();
-                                },
-                              ),
                             ),
                           ],
                         ),

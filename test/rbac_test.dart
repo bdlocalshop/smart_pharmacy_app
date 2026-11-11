@@ -140,7 +140,7 @@ void main() {
       expect(find.text('Medicine Master'), findsWidgets);
       expect(find.text('Expiry Radar & Alerts'), findsWidgets);
       expect(find.text('Staff Management'), findsNothing);
-      expect(find.text('Database & Backups'), findsNothing);
+      expect(find.text('Backups & Restore'), findsNothing);
       expect(find.text('Financial & Profit Reports'), findsNothing);
 
       // As Owner: All items must appear
@@ -164,7 +164,7 @@ void main() {
       expect(find.text('Expiry Radar & Alerts'), findsWidgets);
       expect(find.text('Financial & Profit Reports'), findsWidgets);
       expect(find.text('Staff Management'), findsWidgets);
-      expect(find.text('Database & Backups'), findsWidgets);
+      expect(find.text('Backups & Restore'), findsWidgets);
     });
 
     testWidgets('Owner can open Staff Management, Add User with Phone, and Edit User', (tester) async {
