@@ -18,6 +18,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _showCloudLicenseDialog() async {
     final cloudService = ref.read(cloudLicenseServiceProvider);
+    final strings = ref.read(appStringsProvider);
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -32,36 +33,74 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.cloud_done_outlined, color: AppColors.primary),
-            SizedBox(width: 10),
-            Text('Cloud License & Server Status'),
+            const Icon(Icons.cloud_done_outlined, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Text(strings.cloudStatusTitle),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('API Server: ${AppConfig.apiBaseUrl}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: status.success ? AppColors.accent.withValues(alpha: 0.1) : AppColors.alertCritical.withValues(alpha: 0.1),
+                color: status.success
+                    ? AppColors.accent.withValues(alpha: 0.1)
+                    : AppColors.alertCritical.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: status.success
+                      ? AppColors.accent.withValues(alpha: 0.3)
+                      : AppColors.alertCritical.withValues(alpha: 0.3),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Server Connection: ${status.success ? "CONNECTED" : "OFFLINE / UNREACHABLE"}',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: status.success ? AppColors.accent : AppColors.alertCritical)),
-                  if (status.verificationStatus != null)
-                    Text('Verification: ${status.verificationStatus!.toUpperCase()}'),
-                  if (status.licenseStatus != null)
-                    Text('License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)'),
-                  if (!status.success && status.message != null)
-                    Text('Notice: ${status.message!}', style: const TextStyle(fontSize: 12)),
+                  Row(
+                    children: [
+                      Icon(
+                        status.success ? Icons.cloud_done : Icons.cloud_off,
+                        size: 18,
+                        color: status.success ? AppColors.accent : AppColors.alertCritical,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        status.success
+                            ? strings.cloudServerConnected
+                            : strings.cloudServerOffline,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: status.success ? AppColors.accent : AppColors.alertCritical,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  if (!status.success) ...[
+                    Text(
+                      strings.cloudServerOfflineHelp,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textPrimary,
+                        height: 1.4,
+                      ),
+                    ),
+                  ] else ...[
+                    if (status.verificationStatus != null)
+                      Text(
+                        'Verification: ${status.verificationStatus!.toUpperCase()}',
+                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                      ),
+                    if (status.licenseStatus != null)
+                      Text(
+                        'License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)',
+                        style: const TextStyle(fontSize: 12.5, height: 1.4),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -70,10 +109,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Close'),
+            child: Text(strings.close),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               Navigator.of(ctx).pop();
               final valRes = await cloudService.validateLicense();
@@ -86,7 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 );
               }
             },
-            child: const Text('Re-validate License'),
+            child: Text(strings.revalidateLicenseBtn),
           ),
         ],
       ),

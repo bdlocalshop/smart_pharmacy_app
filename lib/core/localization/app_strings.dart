@@ -64,6 +64,13 @@ class AppStrings {
   String get offlineModeWal => isBn ? 'এসকিউএলআইটি ওয়াল • অফলাইন মোড' : 'SQLite WAL • Offline Mode';
   String get tenantPrefix => isBn ? 'টেন্যান্ট:' : 'Tenant:';
   String get persistentSecureSession => isBn ? 'সুরক্ষিত স্থায়ী স্টোরেজ সেশন' : 'Persistent Secure Storage Session';
+  String get cloudServerConnected => isBn ? 'ক্লাউড সার্ভার: সংযুক্ত' : 'Server Connection: Connected';
+  String get cloudServerOffline => isBn ? 'ক্লাউড সার্ভার: অফলাইন' : 'Server Connection: Offline';
+  String get cloudServerOfflineHelp => isBn
+      ? 'ক্লাউড সার্ভারের সাথে যোগাযোগ করা সম্ভব হচ্ছে না। অনুগ্রহ করে ইন্টারনেট সংযোগ পরীক্ষা করুন।'
+      : 'Unable to connect to the cloud server. Please check your internet connection or try again later.';
+  String get cloudStatusTitle => isBn ? 'ক্লাউড লাইসেন্স ও সার্ভার স্ট্যাটাস' : 'Cloud License & Server Status';
+  String get revalidateLicenseBtn => isBn ? 'পুনরায় লাইসেন্স যাচাই করুন' : 'Re-validate License';
 
   // --- Roles ---
   String get roleOwner => isBn ? 'মালিক / প্রশাসক' : 'Owner / Administrator';

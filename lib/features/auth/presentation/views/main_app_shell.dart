@@ -398,14 +398,14 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(16),
                                       ),
-                                      title: const Row(
+                                      title: Row(
                                         children: [
-                                          Icon(
+                                          const Icon(
                                             Icons.cloud_done_outlined,
                                             color: AppColors.primary,
                                           ),
-                                          SizedBox(width: 8),
-                                          Text('Cloud License & Server Status'),
+                                          const SizedBox(width: 8),
+                                          Text(strings.cloudStatusTitle),
                                         ],
                                       ),
                                       content: Column(
@@ -413,38 +413,80 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            'API Endpoint: ${AppConfig.apiBaseUrl}',
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          Text(
-                                            'Server Connection: ${status.success ? "CONNECTED" : "OFFLINE / UNREACHABLE"}',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
+                                          Container(
+                                            padding: const EdgeInsets.all(14),
+                                            decoration: BoxDecoration(
                                               color: status.success
-                                                  ? AppColors.accent
-                                                  : AppColors.alertCritical,
+                                                  ? AppColors.accent.withValues(alpha: 0.1)
+                                                  : AppColors.alertCritical.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: status.success
+                                                    ? AppColors.accent.withValues(alpha: 0.3)
+                                                    : AppColors.alertCritical.withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(
+                                                      status.success
+                                                          ? Icons.cloud_done
+                                                          : Icons.cloud_off,
+                                                      size: 18,
+                                                      color: status.success
+                                                          ? AppColors.accent
+                                                          : AppColors.alertCritical,
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      status.success
+                                                          ? strings.cloudServerConnected
+                                                          : strings.cloudServerOffline,
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        color: status.success
+                                                            ? AppColors.accent
+                                                            : AppColors.alertCritical,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 10),
+                                                if (!status.success) ...[
+                                                  Text(
+                                                    strings.cloudServerOfflineHelp,
+                                                    style: const TextStyle(
+                                                      fontSize: 12.5,
+                                                      color: AppColors.textPrimary,
+                                                      height: 1.4,
+                                                    ),
+                                                  ),
+                                                ] else ...[
+                                                  if (status.verificationStatus != null)
+                                                    Text(
+                                                      'Verification: ${status.verificationStatus!.toUpperCase()}',
+                                                      style: const TextStyle(fontSize: 12.5, height: 1.4),
+                                                    ),
+                                                  if (status.licenseStatus != null)
+                                                    Text(
+                                                      'License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)',
+                                                      style: const TextStyle(fontSize: 12.5, height: 1.4),
+                                                    ),
+                                                ],
+                                              ],
                                             ),
                                           ),
-                                          if (status.licenseStatus != null)
-                                            Text(
-                                              'License: ${status.licenseStatus!} (${status.daysRemaining ?? 0} days remaining)',
-                                            ),
-                                          if (status.verificationStatus != null)
-                                            Text(
-                                              'Verification: ${status.verificationStatus!.toUpperCase()}',
-                                            ),
                                         ],
                                       ),
                                       actions: [
                                         TextButton(
                                           onPressed: () =>
                                               Navigator.of(ctx).pop(),
-                                          child: const Text('Close'),
+                                          child: Text(strings.close),
                                         ),
                                         ElevatedButton(
                                           style: ElevatedButton.styleFrom(
@@ -461,15 +503,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                               ).showSnackBar(
                                                 SnackBar(
                                                   content: Text(
-                                                    val.message ?? 'Validated',
+                                                    val.message ?? (val.success ? 'Validated' : 'Validation Failed'),
                                                   ),
                                                 ),
                                               );
                                             }
                                           },
-                                          child: const Text(
-                                            'Validate License (HMAC)',
-                                          ),
+                                          child: Text(strings.revalidateLicenseBtn),
                                         ),
                                       ],
                                     ),

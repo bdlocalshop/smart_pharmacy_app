@@ -232,16 +232,24 @@ class CloudLicenseService {
   /// Sanitizes raw error strings to prevent leaking internal endpoints or IP addresses to end users.
   static String sanitizeErrorMessage(String rawMessage) {
     if (isConnectionError(rawMessage)) {
-      return 'Unable to reach the registration server. Please check your internet connection and try again.';
+      return 'Unable to connect to the cloud server. Please check your internet connection or try again later.';
     }
 
     var clean = rawMessage
         .replaceFirst(RegExp(r'^(AppException|Exception):\s*'), '')
         .replaceFirst(RegExp(r'^API (request|connection) failed:\s*'), '');
 
-    // Strip any leaked http/https URLs or IP endpoints
-    clean = clean.replaceAll(RegExp(r'https?://[^\s]+'), '[server]');
-    return clean.trim();
+    // Strip any leaked http/https URLs, IPs, or system exception details
+    clean = clean.replaceAll(RegExp(r'https?://[^\s]+'), '');
+    clean = clean.replaceAll(RegExp(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?\b'), '');
+    clean = clean.replaceAll(RegExp(r'ClientException.*', caseSensitive: false), '');
+    clean = clean.replaceAll(RegExp(r'SocketException.*', caseSensitive: false), '');
+    clean = clean.replaceAll(RegExp(r'OS Error.*', caseSensitive: false), '');
+    clean = clean.trim();
+    if (clean.isEmpty) {
+      return 'Unable to connect to the cloud server. Please check your internet connection or try again later.';
+    }
+    return clean;
   }
 
   /// Validates license with HMAC-SHA256 signature and issues a cloud session token.
@@ -372,7 +380,7 @@ class CloudLicenseService {
     } catch (e) {
       return CloudStatusResult(
         success: false,
-        message: e.toString().replaceFirst('AppException: ', ''),
+        message: sanitizeErrorMessage(e.toString()),
       );
     }
   }
